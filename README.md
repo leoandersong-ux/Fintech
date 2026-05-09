@@ -12,7 +12,9 @@ Use these settings in Streamlit Community Cloud:
 - Branch: `main`
 - Main file path: `streamlit_app.py`
 - Python dependencies: `requirements.txt`
-- Python runtime: `runtime.txt` pins Python 3.12 so binary wheels such as `pyarrow` install cleanly.
+- Python version: choose Python `3.12` from Streamlit Cloud **Advanced settings** when creating the app. Community Cloud does not use `runtime.txt` for Python version selection.
+
+If the app was created with Python 3.14 and fails while building `pyarrow`, delete and redeploy the app with Python 3.12 selected in Advanced settings. Python itself cannot be changed in-place after deployment.
 
 ## Local Run
 

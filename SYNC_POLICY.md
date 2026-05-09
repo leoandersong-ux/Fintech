@@ -24,6 +24,7 @@ Before syncing:
 - Run Python compile checks for changed Python files.
 - Confirm `streamlit_app.py` remains the Streamlit Cloud entrypoint.
 - Confirm `requirements.txt` contains required deploy dependencies.
+- Confirm Streamlit Cloud deploy settings use Python 3.12 in Advanced settings; do not rely on `runtime.txt`.
 - Scan intended files for secrets, passwords, API keys, private borrower data, logged-in/private-source material, employer-internal data, and unrelated Zambia Opportunity Radar assets.
 
 ## Allowed Sync Set
