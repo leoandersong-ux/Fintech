@@ -8,10 +8,11 @@ This Streamlit app is for market understanding and capability-building. It is no
 
 Use these settings in Streamlit Community Cloud:
 
-- Repository: `leoandersong-ux/Fintech-`
+- Repository: `leoandersong-ux/Fintech`
 - Branch: `main`
 - Main file path: `streamlit_app.py`
 - Python dependencies: `requirements.txt`
+- Python runtime: `runtime.txt` pins Python 3.12 so binary wheels such as `pyarrow` install cleanly.
 
 ## Local Run
 
