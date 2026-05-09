@@ -1,0 +1,13 @@
+node_modules/
+.venv-scraping/
+.venv-lending/
+.scraping-pydeps/
+.lending-pydeps/
+*_preview.png
+*_preview_page*.png
+*_qa_unencrypted.pdf
+__pycache__/
+*.pyc
+data/raw/
+_tmp/
+_docx_render*/
