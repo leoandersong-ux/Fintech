@@ -1078,8 +1078,6 @@ def render_review_cockpit(conn: sqlite3.Connection) -> None:
             [
                 "id",
                 "_merge_signal_id",
-                "source_id",
-                "source_name",
                 "source_url",
                 "item_title",
                 "item_url",
