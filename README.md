@@ -27,14 +27,15 @@ If the app was created with Python 3.14 and fails while building `pyarrow`, dele
 ```powershell
 & '.\.venv-lending\Scripts\python.exe' .\lending_ops_radar\pipeline.py source-health
 & '.\.venv-lending\Scripts\python.exe' .\lending_ops_radar\quality.py
-& '.\.venv-lending\Scripts\python.exe' .\lending_ops_radar\brief_generator.py --week current
-& '.\.venv-lending\Scripts\python.exe' .\lending_ops_radar\competitor_matrix.py
+& '.\.venv-lending\Scripts\python.exe' .\lending_ops_radar\brief_generator.py --week current --language zh
+& '.\.venv-lending\Scripts\python.exe' .\lending_ops_radar\competitor_matrix.py --language zh
 ```
 
 ## Current Node
 
-- Version notes: [v0.4 Review Workflow Layer](./VERSION_NOTES_2026-05-11_v0.4.md)
-- Previous node: [v0.3 Intelligence Quality Layer](./VERSION_NOTES_2026-05-11_v0.3.md)
+- Version notes: [v0.5 Business Interpretation Layer](./VERSION_NOTES_2026-05-11_v0.5.md)
+- Previous node: [v0.4 Review Workflow Layer](./VERSION_NOTES_2026-05-11_v0.4.md)
+- Earlier node: [v0.3 Intelligence Quality Layer](./VERSION_NOTES_2026-05-11_v0.3.md)
 - Weekly operating rhythm: [Weekly Research Workflow](./WEEKLY_RESEARCH_WORKFLOW.md)
 
 ## Included Data

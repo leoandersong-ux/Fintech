@@ -544,6 +544,105 @@ def coverage_gaps(assessments: list[dict[str, str | int]]) -> list[dict[str, str
     return rows
 
 
+BUSINESS_LANES: tuple[dict[str, object], ...] = (
+    {
+        "lane_key": "regulatory_payment",
+        "lane_cn": "监管与支付轨道",
+        "lane_en": "Regulatory and Payment Rails",
+        "domain_keys": ("payment_rails", "fees_disclosure", "privacy_data"),
+        "classifications": ("regulatory", "privacy", "fees", "repayment", "disbursement"),
+        "why_cn": "这条线决定贷款产品能不能稳定放款、正确入账、解释费用，并在监管/消费者保护语境下保持可复核。",
+        "why_en": "This lane determines whether the lending product can disburse reliably, post repayments correctly, explain fees, and remain reviewable under regulatory and consumer-protection expectations.",
+        "next_action_cn": "固定追踪 BoZ 支付系统、CCPC 消费者保护、DPC 数据保护；每条信号都映射到产品页面、支付异常、客服话术或复核清单。",
+        "next_action_en": "Keep watching BoZ payment systems, CCPC consumer protection, and DPC data protection; map each signal to product screens, payment exceptions, support scripts, or review checklists.",
+    },
+    {
+        "lane_key": "competitor_matrix",
+        "lane_cn": "竞品产品矩阵",
+        "lane_en": "Competitor Product Matrix",
+        "domain_keys": ("competitor_market",),
+        "classifications": ("competitor_change",),
+        "why_cn": "竞品变化最有价值的部分不是“谁存在”，而是额度、期限、费用表达、速度承诺、支付方式、客服/隐私入口如何组合成产品打法。",
+        "why_en": "The useful part of competitor monitoring is not who exists, but how limits, tenor, pricing language, speed promises, payment methods, support, and privacy routes form product strategy.",
+        "next_action_cn": "把已复核竞品信号继续结构化成额度档、期限、速度、支付成熟度、客服/隐私成熟度和公开信息缺口。",
+        "next_action_en": "Keep structuring reviewed competitor signals into limit tier, tenor, speed, payment maturity, support/privacy maturity, and evidence gaps.",
+    },
+    {
+        "lane_key": "complaint_reputation",
+        "lane_cn": "投诉、客服与舆情",
+        "lane_en": "Complaints, Support, and Reputation",
+        "domain_keys": ("complaints_support", "fraud_security"),
+        "classifications": ("complaint", "fraud", "news_signal"),
+        "why_cn": "这条线更接近真实用户摩擦：不到账、扣费不清、客服解释不足、欺诈、账号或钱包问题，都会直接影响坏账、投诉和口碑。",
+        "why_en": "This lane is closest to real user friction: delayed payout, unclear charges, weak support explanations, fraud, account, or wallet issues directly affect credit loss, complaints, and reputation.",
+        "next_action_cn": "增加公开 app listing/review、公开新闻和公开投诉关键词 watchlist；只抓公开页面，不碰登录、私域群组或借款人数据。",
+        "next_action_en": "Add public app listing/review, public news, and public complaint-keyword watchlists; use only public pages, not logged-in spaces, private groups, or borrower data.",
+    },
+    {
+        "lane_key": "collections_customer_conduct",
+        "lane_cn": "催收与客户沟通",
+        "lane_en": "Collections and Customer Communication",
+        "domain_keys": ("collections_conduct", "complaints_support", "privacy_data"),
+        "classifications": ("collections", "complaint", "privacy"),
+        "why_cn": "催收风险通常不会先以政策文件出现，而会从投诉、隐私边界、联系人使用、逾期解释和客服升级里显形。",
+        "why_en": "Collections risk often appears first through complaints, privacy boundaries, contact-person usage, overdue explanations, and support escalation rather than formal policy documents.",
+        "next_action_cn": "在投诉/评论来源中强化 overdue、late payment、collection、harassment、contact、privacy 等关键词，并把结果映射到催收话术和升级边界。",
+        "next_action_en": "Strengthen overdue, late payment, collection, harassment, contact, and privacy keywords in complaint/review sources, then map results to collections scripts and escalation boundaries.",
+    },
+    {
+        "lane_key": "brief_and_deployment",
+        "lane_cn": "周报解读与部署数据层",
+        "lane_en": "Brief Interpretation and Deployment Data Layer",
+        "domain_keys": ("payment_rails", "fees_disclosure", "complaints_support", "competitor_market", "privacy_data", "collections_conduct"),
+        "classifications": ("regulatory", "competitor_change", "complaint", "fees", "disbursement", "repayment", "privacy", "fraud", "collections", "news_signal"),
+        "why_cn": "平台的价值不在抓取次数，而在每周能不能产出一份可读、可复核、能指导学习重点的个人研究笔记。",
+        "why_en": "The platform's value is not crawl volume. It is whether each week produces a readable, source-linked note that guides learning priorities.",
+        "next_action_cn": "云端展示用 GitHub snapshot 和生成的 Markdown/CSV，本地继续保留 SQLite 作为研究库；节点版本同步后让 Streamlit 自动刷新。",
+        "next_action_en": "Use GitHub snapshots and generated Markdown/CSV for cloud display while keeping SQLite as the local research store; milestone sync should trigger Streamlit refresh.",
+    },
+)
+
+
+def operating_lane_rows(assessments: list[dict[str, str | int]]) -> list[dict[str, str | int]]:
+    rows: list[dict[str, str | int]] = []
+    for lane in BUSINESS_LANES:
+        domain_keys = set(lane["domain_keys"])
+        classifications = set(lane["classifications"])
+        matched = [
+            item
+            for item in assessments
+            if str(item.get("domain_key", "")) in domain_keys
+            or str(item.get("classification", "")) in classifications
+        ]
+        high_count = sum(1 for item in matched if item.get("impact_level") == "high")
+        medium_count = sum(1 for item in matched if item.get("impact_level") == "medium")
+        if high_count >= 3:
+            priority_cn, priority_en = "优先推进", "Priority"
+        elif high_count or medium_count >= 3:
+            priority_cn, priority_en = "持续建设", "Build next"
+        elif matched:
+            priority_cn, priority_en = "补证观察", "Needs evidence"
+        else:
+            priority_cn, priority_en = "覆盖不足", "Coverage gap"
+        rows.append(
+            {
+                "lane_key": str(lane["lane_key"]),
+                "lane_cn": str(lane["lane_cn"]),
+                "lane_en": str(lane["lane_en"]),
+                "evidence_count": len(matched),
+                "high_impact_count": high_count,
+                "medium_impact_count": medium_count,
+                "priority_cn": priority_cn,
+                "priority_en": priority_en,
+                "why_cn": str(lane["why_cn"]),
+                "why_en": str(lane["why_en"]),
+                "next_action_cn": str(lane["next_action_cn"]),
+                "next_action_en": str(lane["next_action_en"]),
+            }
+        )
+    return rows
+
+
 def assessment_table_rows(assessments: list[dict[str, str | int]], limit: int = 20) -> list[dict[str, str | int]]:
     ordered = sorted(
         assessments,

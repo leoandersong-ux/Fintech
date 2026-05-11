@@ -8,11 +8,11 @@ The current target is **capability-building**, not commercialization.
 
 ## Reading Mode
 
-The Streamlit dashboard and generated weekly notes are intentionally bilingual:
+The Streamlit dashboard now defaults to a cleaner Chinese reading mode:
 
-- Chinese first for fast personal reading.
-- English beside it for source terminology, commands, and future reuse.
-- Tables keep original source text intact, while UI labels, section titles, guardrails, and note structure are shown as `中文 | English`.
+- Chinese is the default for personal reading.
+- A prominent top button switches the app to English-only mode for future reuse.
+- Tables keep original source text intact, while UI labels, section titles, guardrails, weekly notes, and matrix previews follow the selected language.
 
 ## What It Does
 
@@ -70,6 +70,20 @@ Use it to:
 - Apply classification-specific review templates.
 - Mark signals as reviewed, brief candidates, source-review items, background, or rejected.
 - Keep weekly notes focused on high-quality, source-linked signals.
+
+## Business Interpretation Layer
+
+`v0.5` adds a five-lane action board and cleaner language modes.
+
+Use the intelligence tab to read:
+
+- regulatory and payment-rail impact,
+- competitor product-matrix direction,
+- complaint, support, and reputation themes,
+- collections and customer-communication risk,
+- weekly-brief and deployment data-layer next actions.
+
+Generated notes and competitor matrices now support `--language zh|en`.
 
 ## Guardrails
 

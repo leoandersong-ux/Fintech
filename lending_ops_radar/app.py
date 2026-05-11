@@ -27,6 +27,7 @@ from lending_ops_radar.intelligence import (
     assessment_table_rows,
     build_assessments,
     coverage_gaps,
+    operating_lane_rows,
     top_interpretive_findings,
 )
 from lending_ops_radar.competitor_matrix import build_product_matrix, render_matrix_markdown
@@ -35,7 +36,7 @@ from lending_ops_radar.quality import build_quality_rows, summary_counts
 from lending_ops_radar.version import APP_VERSION, APP_VERSION_LABEL
 
 
-st.set_page_config(page_title=f"个人研究雷达 {APP_VERSION} | Lending Radar", layout="wide")
+st.set_page_config(page_title=f"个人研究雷达 {APP_VERSION}", layout="wide")
 
 APP_CSS = """
 <style>
@@ -96,8 +97,27 @@ APP_CSS = """
         padding: 0.85rem 1rem;
         margin: 0.45rem 0;
     }
+    .language-banner {
+        background: #153a32;
+        border: 1px solid #214f45;
+        border-radius: 8px;
+        color: #f5fbf8;
+        padding: 0.85rem 1rem;
+        margin: 0 0 0.7rem 0;
+    }
+    .language-banner strong {
+        color: #ffffff;
+        font-size: 1rem;
+    }
+    .language-banner span {
+        color: #cfe3db;
+        font-size: 0.94rem;
+    }
 </style>
 """
+
+DEFAULT_UI_LANGUAGE = "zh"
+LANGUAGE_NAMES = {"zh": "中文", "en": "English"}
 
 COLUMN_LABELS = {
     "id": "ID",
@@ -229,6 +249,18 @@ COLUMN_LABELS = {
     "detail_cn": "说明 | Detail",
     "detail_en": "Detail | EN",
     "rows": "行数 | Rows",
+    "lane_key": "能力线ID | Lane ID",
+    "lane_cn": "迭代线 | Lane",
+    "lane_en": "Lane | EN",
+    "evidence_count": "证据数 | Evidence",
+    "high_impact_count": "高影响数 | High Impact",
+    "medium_impact_count": "中影响数 | Medium Impact",
+    "priority_cn": "推进优先级 | Priority",
+    "priority_en": "Priority | EN",
+    "why_cn": "业务意义 | Why It Matters",
+    "why_en": "Why It Matters | EN",
+    "next_action_cn": "下一步动作 | Next Action",
+    "next_action_en": "Next Action | EN",
 }
 
 STATUS_LABELS = {
@@ -290,19 +322,100 @@ ACTION_TEMPLATES = {
 }
 
 
+def current_language() -> str:
+    language = st.session_state.get("ui_language", DEFAULT_UI_LANGUAGE)
+    return "en" if language == "en" else "zh"
+
+
+def ui_text(cn: str, en: str) -> str:
+    return en if current_language() == "en" else cn
+
+
+def split_bilingual_text(value: object) -> str:
+    text = "" if value is None else str(value)
+    if " | " not in text:
+        return text
+    left, right = text.split(" | ", 1)
+    return right.strip() if current_language() == "en" else left.strip()
+
+
+def split_bilingual_label(value: object) -> str:
+    text = "" if value is None else str(value)
+    if current_language() == "en" and text.endswith(" | EN"):
+        return text[:-5].strip()
+    if current_language() == "zh" and text.endswith(" | CN"):
+        return text[:-5].strip()
+    return split_bilingual_text(text)
+
+
+def language_column(base: str) -> str:
+    return f"{base}_en" if current_language() == "en" else f"{base}_cn"
+
+
+def localized_label_map() -> dict[str, str]:
+    return {column: split_bilingual_label(label) for column, label in COLUMN_LABELS.items()}
+
+
+def localize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
+    localized = df.copy()
+    columns = list(localized.columns)
+    drops: list[str] = []
+    for column in columns:
+        if column.endswith("_cn"):
+            base = column[:-3]
+            twin = f"{base}_en"
+            if twin in columns:
+                if current_language() == "en":
+                    drops.append(column)
+        elif column.endswith("_en"):
+            base = column[:-3]
+            twin = f"{base}_cn"
+            if twin in columns:
+                if current_language() == "zh":
+                    drops.append(column)
+    if drops:
+        localized = localized.drop(columns=drops, errors="ignore")
+    return localized
+
+
+def render_language_switcher() -> None:
+    if "ui_language" not in st.session_state:
+        st.session_state["ui_language"] = DEFAULT_UI_LANGUAGE
+    is_english = current_language() == "en"
+    col_text, col_button = st.columns([0.74, 0.26])
+    with col_text:
+        st.markdown(
+            f"""
+            <div class="language-banner">
+                <strong>{ui_text("当前阅读模式：中文", "Reading mode: English")}</strong><br>
+                <span>{ui_text("页面默认只显示中文，避免中英并排造成信息噪音。需要英文阅读时，点击右侧按钮切换为纯英文界面。", "This view shows English-only labels and interpretation text. Use the button on the right to switch back to Chinese.")}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with col_button:
+        if st.button(
+            "ENGLISH VERSION" if not is_english else "切换中文版本",
+            type="primary",
+            use_container_width=True,
+        ):
+            st.session_state["ui_language"] = "en" if not is_english else "zh"
+            st.rerun()
+
+
 def apply_app_style() -> None:
     st.markdown(APP_CSS, unsafe_allow_html=True)
 
 
 def title_pair(cn: str, en: str) -> str:
-    return f"{cn} | {en}"
+    return ui_text(cn, en)
 
 
 def section_header(cn: str, en: str, note_cn: str = "", note_en: str = "") -> None:
     st.markdown(f"### {title_pair(cn, en)}")
     if note_cn or note_en:
         st.markdown(
-            f'<div class="section-note">{note_cn}<br><span class="quiet">{note_en}</span></div>',
+            f'<div class="section-note">{ui_text(note_cn, note_en)}</div>',
             unsafe_allow_html=True,
         )
 
@@ -315,11 +428,12 @@ def looks_question_garbled(value: object) -> bool:
     return "????" in text or (question_count >= 6 and question_count / max(len(text), 1) > 0.18)
 
 
-def readable_text(value: object, fallback: str = "历史备注存在编码损坏，需回源复核 | Historical note has encoding loss; review source.") -> str:
+def readable_text(value: object, fallback: str | None = None) -> str:
+    fallback = fallback or ui_text("历史备注存在编码损坏，需回源复核。", "Historical note has encoding loss; review source.")
     text = "" if value is None else str(value)
     if looks_question_garbled(text):
         return fallback
-    return text
+    return split_bilingual_text(text)
 
 
 def readable_dataframe(df: pd.DataFrame) -> pd.DataFrame:
@@ -331,7 +445,8 @@ def readable_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 def display_df(df: pd.DataFrame, **kwargs: object) -> None:
     cleaned = readable_dataframe(df)
-    st.dataframe(cleaned.rename(columns=COLUMN_LABELS), use_container_width=True, hide_index=True, **kwargs)
+    cleaned = localize_dataframe_columns(cleaned)
+    st.dataframe(cleaned.rename(columns=localized_label_map()), use_container_width=True, hide_index=True, **kwargs)
 
 
 def count_rows(conn: sqlite3.Connection, query: str, params: tuple = ()) -> int:
@@ -369,6 +484,10 @@ def action_template_for(classification: object) -> str:
     )
 
 
+def option_label(mapping: dict[str, str], value: object) -> str:
+    return readable_text(mapping.get(str(value), str(value)))
+
+
 def append_review_note(existing: object, addition: str) -> str:
     base = "" if looks_question_garbled(existing) else str(existing or "").strip()
     if not base:
@@ -386,16 +505,16 @@ def apply_review_decision(
     existing_notes: object,
     existing_action: object,
 ) -> None:
-    template = action_template_for(classification)
+    template = readable_text(action_template_for(classification))
     action = "" if looks_question_garbled(existing_action) else str(existing_action or "").strip()
     action = action or template
-    note_suffix = f"{APP_VERSION} quick decision: {REVIEW_DECISIONS.get(decision, decision)}."
+    note_suffix = f"{APP_VERSION} quick decision: {readable_text(REVIEW_DECISIONS.get(decision, decision))}."
     if decision == "reviewed":
         update_review(conn, signal_id, "reviewed", 2, append_review_note(existing_notes, note_suffix), action)
     elif decision == "brief_candidate":
-        update_review(conn, signal_id, "reviewed", 1, append_review_note(existing_notes, note_suffix), f"周报候选：{action}")
+        update_review(conn, signal_id, "reviewed", 1, append_review_note(existing_notes, note_suffix), f"{ui_text('周报候选', 'Brief candidate')}: {action}")
     elif decision == "needs_source_review":
-        update_review(conn, signal_id, "new", 1, append_review_note(existing_notes, note_suffix), f"需要回源复核：{template}")
+        update_review(conn, signal_id, "new", 1, append_review_note(existing_notes, note_suffix), f"{ui_text('需要回源复核', 'Needs source review')}: {template}")
     elif decision == "background":
         update_review(conn, signal_id, "reviewed", 3, append_review_note(existing_notes, note_suffix), action)
     elif decision == "rejected":
@@ -405,7 +524,7 @@ def apply_review_decision(
             "rejected",
             3,
             append_review_note(existing_notes, note_suffix),
-            "排除：当前信号对个人研究价值不足或重复。| Rejected: low value or duplicate for this personal research workflow.",
+            ui_text("排除：当前信号对个人研究价值不足或重复。", "Rejected: low value or duplicate for this personal research workflow."),
         )
 
 
@@ -562,21 +681,19 @@ def render_deployment_health(conn: sqlite3.Connection) -> None:
     db_size = round(DEFAULT_DB.stat().st_size / 1024 / 1024, 2) if DEFAULT_DB.exists() else 0
     latest_source = conn.execute("SELECT MAX(updated_at) FROM source_quality").fetchone()[0]
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("数据库 | DB", f"{db_size} MB")
-    col2.metric("信号 | Signals", count_rows(conn, "SELECT COUNT(*) FROM signals"))
-    col3.metric("已复核 | Reviewed", count_rows(conn, "SELECT COUNT(*) FROM reviews WHERE review_status = 'reviewed'"))
-    col4.metric("最近来源运行 | Last Source Run", latest_source or "N/A")
+    col1.metric(title_pair("数据库", "Database"), f"{db_size} MB")
+    col2.metric(title_pair("信号", "Signals"), count_rows(conn, "SELECT COUNT(*) FROM signals"))
+    col3.metric(title_pair("已复核", "Reviewed"), count_rows(conn, "SELECT COUNT(*) FROM reviews WHERE review_status = 'reviewed'"))
+    col4.metric(title_pair("最近来源运行", "Last Source Run"), latest_source or "N/A")
 
-    st.markdown("#### 部署检查 | Deployment Checks")
+    st.markdown(f"#### {title_pair('部署检查', 'Deployment Checks')}")
     display_df(pd.DataFrame(deployment_checks(conn)))
 
-    st.markdown("#### 节点同步边界 | Milestone Sync Boundary")
+    st.markdown(f"#### {title_pair('节点同步边界', 'Milestone Sync Boundary')}")
     st.markdown(
-        """
+        f"""
         <div class="section-note">
-        中文：节点同步只包含 fintech 研究平台文件、SQLite reviewed data、生成的 briefs 和部署文件；不包含无关商机项目资产、PDF/DOCX 渲染物、私人借款人数据或任何 secret。
-        <br>
-        <span class="quiet">English: Milestone sync includes only fintech research platform files, reviewed SQLite data, generated briefs, and deploy files. It excludes unrelated opportunity-radar assets, PDF/DOCX render artifacts, private borrower data, and secrets.</span>
+        {ui_text("节点同步只包含 fintech 研究平台文件、SQLite reviewed data、生成的 briefs 和部署文件；不包含无关商机项目资产、PDF/DOCX 渲染物、私人借款人数据或任何 secret。", "Milestone sync includes only fintech research platform files, reviewed SQLite data, generated briefs, and deployment files. It excludes unrelated opportunity-radar assets, PDF/DOCX render artifacts, private borrower data, and secrets.")}
         </div>
         """,
         unsafe_allow_html=True,
@@ -590,9 +707,9 @@ def render_sources(conn: sqlite3.Connection) -> None:
         "查看当前启用的公开来源、抓取边界和运行健康度。",
         "Review configured public sources, collection boundaries, and source health.",
     )
-    if st.button("初始化/刷新来源配置 | Initialize / Refresh Source Config"):
+    if st.button(title_pair("初始化/刷新来源配置", "Initialize / Refresh Source Config")):
         upsert_sources(conn, load_sources(DEFAULT_SOURCES))
-        st.success("来源配置已刷新 | Source config refreshed.")
+        st.success(ui_text("来源配置已刷新。", "Source config refreshed."))
     display_df(
         dataframe(
             conn,
@@ -604,7 +721,7 @@ def render_sources(conn: sqlite3.Connection) -> None:
         )
     )
 
-    st.markdown("#### 来源健康度 | Source Health")
+    st.markdown(f"#### {title_pair('来源健康度', 'Source Health')}")
     health = dataframe(
         conn,
         """
@@ -650,7 +767,7 @@ def render_new_signals(conn: sqlite3.Connection) -> None:
         """,
     )
     if new_df.empty:
-        st.success("当前没有待审信号 | No new signals in the review queue.")
+        st.success(ui_text("当前没有待审信号。", "No new signals in the review queue."))
     else:
         quality_df = pd.DataFrame(build_quality_rows(new_df.to_dict("records")))
         display_df(
@@ -663,12 +780,14 @@ def render_new_signals(conn: sqlite3.Connection) -> None:
                     "brief_candidate_score",
                     "manual_review_need_score",
                     "quality_tier_cn",
+                    "quality_tier_en",
                     "recommended_use_cn",
+                    "recommended_use_en",
                     "source_link",
                 ]
             ]
         )
-        with st.expander("查看原始新信号 | Raw new signals"):
+        with st.expander(title_pair("查看原始新信号", "Raw New Signals")):
             display_df(new_df.drop(columns=["raw_text"], errors="ignore"))
 
 
@@ -684,26 +803,43 @@ def render_business_intelligence(conn: sqlite3.Connection) -> None:
     quality_rows = build_quality_rows(rows)
     findings = top_interpretive_findings(assessments)
     gaps = coverage_gaps(assessments)
+    lane_rows = operating_lane_rows(assessments)
 
     high_count = sum(1 for item in assessments if item["impact_level"] == "high")
     medium_count = sum(1 for item in assessments if item["impact_level"] == "medium")
     domains = sorted({str(item["domain_cn"]) for item in assessments})
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("已解读信号 | Interpreted", len(assessments))
-    col2.metric("高潜在影响 | High Potential", high_count)
-    col3.metric("中潜在影响 | Medium Potential", medium_count)
-    col4.metric("影响域 | Domains", len(domains))
+    col1.metric(title_pair("已解读信号", "Interpreted Signals"), len(assessments))
+    col2.metric(title_pair("高潜在影响", "High Potential Impact"), high_count)
+    col3.metric(title_pair("中潜在影响", "Medium Potential Impact"), medium_count)
+    col4.metric(title_pair("影响域", "Impact Domains"), len(domains))
 
-    st.markdown("#### 本周最值得看 | Priority Reads")
+    st.markdown(f"#### {title_pair('V0.5 五条迭代线行动板', 'V0.5 Five-Lane Action Board')}")
+    lane_df = pd.DataFrame(lane_rows)
+    if lane_df.empty:
+        st.info(ui_text("暂无可用于行动板的解读信号。", "No interpreted signals available for the action board yet."))
+    else:
+        lane_cols = [
+            language_column("lane"),
+            "evidence_count",
+            "high_impact_count",
+            "medium_impact_count",
+            language_column("priority"),
+            language_column("why"),
+            language_column("next_action"),
+        ]
+        display_df(lane_df[lane_cols])
+
+    st.markdown(f"#### {title_pair('本周最值得看', 'Priority Reads')}")
     quality_df = pd.DataFrame(quality_rows)
     if quality_df.empty:
-        st.info("还没有质量评分 | No quality scores yet.")
+        st.info(ui_text("还没有质量评分。", "No quality scores yet."))
     else:
         q_col1, q_col2, q_col3 = st.columns(3)
         counts = summary_counts(quality_rows)
-        q_col1.metric("优先阅读 | Priority", counts["tier"].get("优先阅读", 0))
-        q_col2.metric("周报候选 | Brief Candidates", counts["tier"].get("周报候选", 0))
-        q_col3.metric("平均候选分 | Avg Score", f"{round(quality_df['brief_candidate_score'].mean())}/100")
+        q_col1.metric(title_pair("优先阅读", "Priority Reads"), counts["tier"].get("优先阅读", 0))
+        q_col2.metric(title_pair("周报候选", "Brief Candidates"), counts["tier"].get("周报候选", 0))
+        q_col3.metric(title_pair("平均候选分", "Average Score"), f"{round(quality_df['brief_candidate_score'].mean())}/100")
         display_df(
             quality_df.head(5)[
                 [
@@ -716,72 +852,73 @@ def render_business_intelligence(conn: sqlite3.Connection) -> None:
                     "lending_relevance_score",
                     "manual_review_need_score",
                     "quality_tier_cn",
+                    "quality_tier_en",
                     "recommended_use_cn",
+                    "recommended_use_en",
                     "quality_reason_cn",
+                    "quality_reason_en",
                     "source_link",
                 ]
             ]
         )
 
-    st.markdown("#### 关键判断 | Key Interpretive Findings")
+    st.markdown(f"#### {title_pair('关键判断', 'Key Interpretive Findings')}")
     for item in findings:
         st.markdown(
             f"""
             <div class="insight-card">
-                <strong>{item['finding_cn']}</strong><br>
-                <span class="quiet">{item['finding_en']}</span><br><br>
-                {item['why_cn']}<br>
-                <span class="quiet">{item['why_en']}</span>
+                <strong>{ui_text(item['finding_cn'], item['finding_en'])}</strong><br><br>
+                {ui_text(item['why_cn'], item['why_en'])}
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    st.markdown("#### 小微贷款业务影响矩阵 | Micro-lending Impact Matrix")
+    st.markdown(f"#### {title_pair('小微贷款业务影响矩阵', 'Micro-lending Impact Matrix')}")
     impact_df = pd.DataFrame(assessment_table_rows(assessments, limit=50))
     if impact_df.empty:
-        st.info("还没有已复核信号可解读 | No reviewed signals available for interpretation.")
+        st.info(ui_text("还没有已复核信号可解读。", "No reviewed signals available for interpretation."))
     else:
         st.markdown(
-            """
+            f"""
             <div class="section-note">
-            中文：这里按卡片阅读，不再用宽表格。每张卡片只回答一个问题：这条公开信号会影响小微贷款业务的哪个流程、为什么重要、下一步该回源确认什么。
-            <br>
-            <span class="quiet">English: This is card-based instead of a wide table. Each card explains which lending process the public signal may affect, why it matters, and what to verify next.</span>
+            {ui_text("这里按卡片阅读，不再用宽表格。每张卡片只回答一个问题：这条公开信号会影响小微贷款业务的哪个流程、为什么重要、下一步该回源确认什么。", "This is card-based instead of a wide table. Each card explains which lending process the public signal may affect, why it matters, and what to verify next.")}
             </div>
             """,
             unsafe_allow_html=True,
         )
         for index, item in enumerate(impact_df.head(12).to_dict("records"), start=1):
             with st.container(border=True):
-                st.markdown(f"**{index}. {readable_text(item['domain_cn'])} | {readable_text(item['domain_en'])}**")
-                st.caption(f"Level: {readable_text(item['impact_level'])} · Signal ID: {readable_text(item['signal_id'])}")
-                st.markdown(f"**信号 | Signal:** {readable_text(item['signal'])}")
-                st.markdown(f"**对小微贷款业务的影响：** {readable_text(item['lending_impact_cn'])}")
-                st.markdown(f"**Lending impact:** {readable_text(item['lending_impact_en'])}")
-                st.markdown(f"**建议动作：** {readable_text(item['recommended_actions_cn'])}")
-                st.markdown(f"**Recommended action:** {readable_text(item['recommended_actions_en'])}")
-                st.markdown(f"**待验证问题：** {readable_text(item['follow_up_questions_cn'])}")
-                st.markdown(f"**Follow-up question:** {readable_text(item['follow_up_questions_en'])}")
-                st.markdown(f"[来源 | Source]({readable_text(item['source_link'])})")
-        with st.expander("查看完整结构化表格 | Full structured table"):
+                st.markdown(f"**{index}. {ui_text(readable_text(item['domain_cn']), readable_text(item['domain_en']))}**")
+                st.caption(f"{ui_text('等级', 'Level')}: {readable_text(item['impact_level'])} · Signal ID: {readable_text(item['signal_id'])}")
+                st.markdown(f"**{title_pair('信号', 'Signal')}:** {readable_text(item['signal'])}")
+                st.markdown(f"**{title_pair('对小微贷款业务的影响', 'Micro-lending impact')}:** {ui_text(readable_text(item['lending_impact_cn']), readable_text(item['lending_impact_en']))}")
+                st.markdown(f"**{title_pair('建议动作', 'Recommended action')}:** {ui_text(readable_text(item['recommended_actions_cn']), readable_text(item['recommended_actions_en']))}")
+                st.markdown(f"**{title_pair('待验证问题', 'Follow-up question')}:** {ui_text(readable_text(item['follow_up_questions_cn']), readable_text(item['follow_up_questions_en']))}")
+                st.markdown(f"[{title_pair('来源', 'Source')}]({readable_text(item['source_link'])})")
+        with st.expander(title_pair("查看完整结构化表格", "Full Structured Table")):
             display_df(
                 impact_df[
                     [
                         "signal_id",
                         "domain_cn",
+                        "domain_en",
                         "impact_level",
                         "signal",
                         "lending_impact_cn",
+                        "lending_impact_en",
                         "affected_processes_cn",
+                        "affected_processes_en",
                         "recommended_actions_cn",
+                        "recommended_actions_en",
                         "follow_up_questions_cn",
+                        "follow_up_questions_en",
                         "source_link",
                     ]
                 ]
             )
 
-    st.markdown("#### 情报覆盖缺口 | Intelligence Coverage Gaps")
+    st.markdown(f"#### {title_pair('情报覆盖缺口', 'Intelligence Coverage Gaps')}")
     gap_df = pd.DataFrame(gaps)
     display_df(gap_df[["area_cn", "coverage_cn", "gap_cn", "next_source_cn", "area_en", "coverage_en", "gap_en", "next_source_en"]])
 
@@ -824,26 +961,25 @@ def render_competitor_watch(conn: sqlite3.Connection) -> None:
         """,
     )
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("竞品源 | Sources", len(sources))
-    col2.metric("已启用 | Enabled", int((sources["enabled"] == 1).sum()) if not sources.empty else 0)
-    col3.metric("竞品信号 | Signals", len(signals))
-    col4.metric("待复核 | New", int((signals["review_status"] == "new").sum()) if not signals.empty else 0)
+    col1.metric(title_pair("竞品源", "Sources"), len(sources))
+    col2.metric(title_pair("已启用", "Enabled"), int((sources["enabled"] == 1).sum()) if not sources.empty else 0)
+    col3.metric(title_pair("竞品信号", "Signals"), len(signals))
+    col4.metric(title_pair("待复核", "New"), int((signals["review_status"] == "new").sum()) if not signals.empty else 0)
 
-    st.markdown("#### 来源清单 | Source Watchlist")
+    st.markdown(f"#### {title_pair('来源清单', 'Source Watchlist')}")
     display_df(sources)
 
-    st.markdown("#### 竞品新信号 | Competitor Signals")
+    st.markdown(f"#### {title_pair('竞品新信号', 'Competitor Signals')}")
     if signals.empty:
-        st.info("还没有竞品信号。运行启用的 competitor watchlist 源后会出现在这里。| No competitor signals yet.")
+        st.info(ui_text("还没有竞品信号。运行启用的 competitor watchlist 源后会出现在这里。", "No competitor signals yet. Run enabled competitor watchlist sources and they will appear here."))
     else:
         display_df(signals)
 
-    st.markdown("#### 阅读框架 | Review Lens")
+    st.markdown(f"#### {title_pair('阅读框架', 'Review Lens')}")
     st.markdown(
-        """
+        f"""
         <div class="section-note">
-        中文：复核竞品信号时优先问：额度/期限/费用是否变化？放款和还款依赖什么支付轨道？客服和争议入口是否清晰？是否出现隐私、催收、失败扣款、到账慢等公开主题？<br>
-        <span class="quiet">English: Review competitor signals through limits, tenor, fees, payment-rail dependency, support/dispute clarity, and public themes such as privacy, collections, failed deductions, and slow payout.</span>
+        {ui_text("复核竞品信号时优先问：额度/期限/费用是否变化？放款和还款依赖什么支付轨道？客服和争议入口是否清晰？是否出现隐私、催收、失败扣款、到账慢等公开主题？", "Review competitor signals through limits, tenor, fees, payment-rail dependency, support/dispute clarity, and public themes such as privacy, collections, failed deductions, and slow payout.")}
         </div>
         """,
         unsafe_allow_html=True,
@@ -860,7 +996,7 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
     rows = build_product_matrix(conn)
     matrix_df = pd.DataFrame(rows)
     if matrix_df.empty:
-        st.info("还没有竞品矩阵。请先复核 competitor signals。| No competitor matrix yet.")
+        st.info(ui_text("还没有竞品矩阵。请先复核 competitor signals。", "No competitor matrix yet. Review competitor signals first."))
         return
 
     matrix_df["data_completeness_score"] = pd.to_numeric(matrix_df["data_completeness_score"], errors="coerce").fillna(0).astype(int)
@@ -875,61 +1011,64 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
         ).sum()
     )
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("机构 | Institutions", institutions)
-    col2.metric("矩阵行 | Matrix Rows", len(matrix_df))
-    col3.metric("平均完整度 | Avg Completeness", f"{round(matrix_df['data_completeness_score'].mean())}/100")
-    col4.metric("高优先级 | High Priority", int(matrix_df["matrix_priority_cn"].str.startswith("高").sum()))
+    col1.metric(title_pair("机构", "Institutions"), institutions)
+    col2.metric(title_pair("矩阵行", "Matrix Rows"), len(matrix_df))
+    col3.metric(title_pair("平均完整度", "Average Completeness"), f"{round(matrix_df['data_completeness_score'].mean())}/100")
+    col4.metric(title_pair("高优先级", "High Priority"), int(matrix_df["matrix_priority_cn"].str.startswith("高").sum()))
 
     st.markdown(
-        """
+        f"""
         <div class="section-note">
-        中文：完整度分数是“公开研究字段是否被捕捉”的分数，不是产品优劣分数。高优先级代表值得先回源复核，因为它可能影响放款体验、支付轨道、风控权重或隐私/投诉运营。
-        <br>
-        <span class="quiet">English: Completeness measures captured public research fields, not product quality. High priority means the item deserves source review because it may affect payout experience, payment rails, risk weight, or privacy/dispute operations.</span>
+        {ui_text("完整度分数是“公开研究字段是否被捕捉”的分数，不是产品优劣分数。高优先级代表值得先回源复核，因为它可能影响放款体验、支付轨道、风控权重或隐私/投诉运营。", "Completeness measures captured public research fields, not product quality. High priority means the item deserves source review because it may affect payout experience, payment rails, risk weight, or privacy/dispute operations.")}
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     filter_col1, filter_col2, filter_col3 = st.columns(3)
+    product_layer_col = language_column("product_layer")
+    limit_tier_col = language_column("limit_tier")
+    payment_maturity_col = language_column("payment_maturity")
+    speed_tier_col = language_column("speed_tier")
+    competitor_positioning_col = language_column("competitor_positioning")
     with filter_col1:
         focus = st.multiselect(
-            "筛选机构 | Filter institutions",
+            title_pair("筛选机构", "Filter Institutions"),
             sorted(matrix_df["institution"].unique().tolist()),
             default=sorted(matrix_df["institution"].unique().tolist()),
         )
     with filter_col2:
         layer_focus = st.multiselect(
-            "产品层 | Product layer",
-            sorted(matrix_df["product_layer_cn"].unique().tolist()),
-            default=sorted(matrix_df["product_layer_cn"].unique().tolist()),
+            title_pair("产品层", "Product Layer"),
+            sorted(matrix_df[product_layer_col].unique().tolist()),
+            default=sorted(matrix_df[product_layer_col].unique().tolist()),
         )
     with filter_col3:
         limit_focus = st.multiselect(
-            "额度档 | Limit tier",
-            sorted(matrix_df["limit_tier_cn"].unique().tolist()),
-            default=sorted(matrix_df["limit_tier_cn"].unique().tolist()),
+            title_pair("额度档", "Limit Tier"),
+            sorted(matrix_df[limit_tier_col].unique().tolist()),
+            default=sorted(matrix_df[limit_tier_col].unique().tolist()),
         )
     filtered = matrix_df.copy()
     if focus:
         filtered = filtered[filtered["institution"].isin(focus)]
     if layer_focus:
-        filtered = filtered[filtered["product_layer_cn"].isin(layer_focus)]
+        filtered = filtered[filtered[product_layer_col].isin(layer_focus)]
     if limit_focus:
-        filtered = filtered[filtered["limit_tier_cn"].isin(limit_focus)]
+        filtered = filtered[filtered[limit_tier_col].isin(limit_focus)]
 
-    st.markdown("#### 横向比较 | Comparison Summary")
+    st.markdown(f"#### {title_pair('横向比较', 'Comparison Summary')}")
     compare_col1, compare_col2 = st.columns(2)
     with compare_col1:
         display_df(
-            filtered.groupby("product_layer_cn", dropna=False)
+            filtered.groupby(product_layer_col, dropna=False)
             .size()
             .reset_index(name="rows")
             .sort_values("rows", ascending=False)
         )
     with compare_col2:
         display_df(
-            filtered.groupby("limit_tier_cn", dropna=False)
+            filtered.groupby(limit_tier_col, dropna=False)
             .size()
             .reset_index(name="rows")
             .sort_values("rows", ascending=False)
@@ -938,22 +1077,22 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
     compare_col3, compare_col4 = st.columns(2)
     with compare_col3:
         display_df(
-            filtered.groupby("payment_maturity_cn", dropna=False)
+            filtered.groupby(payment_maturity_col, dropna=False)
             .size()
             .reset_index(name="rows")
             .sort_values("rows", ascending=False)
         )
     with compare_col4:
         display_df(
-            filtered.groupby("speed_tier_cn", dropna=False)
+            filtered.groupby(speed_tier_col, dropna=False)
             .size()
             .reset_index(name="rows")
             .sort_values("rows", ascending=False)
         )
 
-    st.markdown("#### 竞品定位 2.0 | Competitor Positioning 2.0")
+    st.markdown(f"#### {title_pair('竞品定位 3.0', 'Competitor Positioning 3.0')}")
     display_df(
-        filtered.groupby("competitor_positioning_cn", dropna=False)
+        filtered.groupby(competitor_positioning_col, dropna=False)
         .agg(
             rows=("product_or_signal", "count"),
             avg_completeness=("data_completeness_score", "mean"),
@@ -962,32 +1101,44 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
         .sort_values("rows", ascending=False)
     )
 
-    st.markdown(f"#### 产品矩阵 | Product Matrix ({len(filtered)} rows)")
+    st.markdown(f"#### {title_pair('产品矩阵', 'Product Matrix')} ({len(filtered)} {ui_text('行', 'rows')})")
     display_cols = [
         "institution",
         "product_or_signal",
         "competitor_positioning_cn",
+        "competitor_positioning_en",
         "product_layer_cn",
+        "product_layer_en",
         "limit_tier_cn",
+        "limit_tier_en",
         "segment_cn",
+        "segment_en",
         "limit_amount",
         "tenor_or_repayment",
         "pricing_or_disclosure",
         "speed_tier_cn",
+        "speed_tier_en",
         "payment_maturity_cn",
+        "payment_maturity_en",
         "support_privacy_maturity_cn",
+        "support_privacy_maturity_en",
         "data_completeness_score",
         "matrix_priority_cn",
+        "matrix_priority_en",
         "operating_risk_focus_cn",
+        "operating_risk_focus_en",
         "gap_flags_cn",
+        "gap_flags_en",
         "business_interpretation_cn",
+        "business_interpretation_en",
         "next_questions_cn",
+        "next_questions_en",
         "source_links",
         "source_status",
     ]
     display_df(filtered[display_cols])
 
-    with st.expander("查看原始字段 | Source-linked details"):
+    with st.expander(title_pair("查看原始字段", "Source-linked Details")):
         detail_cols = [
             "institution",
             "product_or_signal",
@@ -1010,22 +1161,22 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
         display_df(filtered[detail_cols])
 
     csv_data = filtered.to_csv(index=False).encode("utf-8-sig")
-    markdown_content = render_matrix_markdown(filtered.to_dict("records"))
+    markdown_content = render_matrix_markdown(filtered.to_dict("records"), language=current_language())
     col_a, col_b = st.columns(2)
     col_a.download_button(
-        "下载 CSV 矩阵 | Download CSV Matrix",
+        title_pair("下载 CSV 矩阵", "Download CSV Matrix"),
         data=csv_data,
         file_name="lending_ops_competitor_product_matrix.csv",
         mime="text/csv",
     )
     col_b.download_button(
-        "下载 Markdown 矩阵 | Download Markdown Matrix",
+        title_pair("下载 Markdown 矩阵", "Download Markdown Matrix"),
         data=markdown_content,
         file_name="zambia_digital_lending_competitor_product_matrix.md",
         mime="text/markdown",
     )
 
-    st.markdown("#### Markdown 预览 | Markdown Preview")
+    st.markdown(f"#### {title_pair('Markdown 预览', 'Markdown Preview')}")
     st.markdown(markdown_content)
 
 
@@ -1065,7 +1216,7 @@ def render_review_cockpit(conn: sqlite3.Connection) -> None:
     )
     rows = review_workflow_rows(conn)
     if rows.empty:
-        st.info("没有可复核信号 | No reviewable signals.")
+        st.info(ui_text("没有可复核信号。", "No reviewable signals."))
         return
 
     quality_df = pd.DataFrame(build_quality_rows(rows.to_dict("records")))
@@ -1096,12 +1247,12 @@ def render_review_cockpit(conn: sqlite3.Connection) -> None:
     new_count = int((merged["review_status"] == "new").sum())
     candidate_count = int((merged["brief_candidate_score"] >= 70).sum())
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("待处理 | New", new_count)
-    col2.metric("周报候选 | Brief Candidates", candidate_count)
-    col3.metric("优先阅读 | Priority Reads", counts["tier"].get("优先阅读", 0))
-    col4.metric("高回源需求 | High Review Need", int((merged["manual_review_need_score"] >= 72).sum()))
+    col1.metric(title_pair("待处理", "New"), new_count)
+    col2.metric(title_pair("周报候选", "Brief Candidates"), candidate_count)
+    col3.metric(title_pair("优先阅读", "Priority Reads"), counts["tier"].get("优先阅读", 0))
+    col4.metric(title_pair("高回源需求", "High Review Need"), int((merged["manual_review_need_score"] >= 72).sum()))
 
-    st.markdown("#### 优先队列 | Priority Queue")
+    st.markdown(f"#### {title_pair('优先队列', 'Priority Queue')}")
     queue_cols = [
         "signal_id",
         "signal",
@@ -1112,14 +1263,16 @@ def render_review_cockpit(conn: sqlite3.Connection) -> None:
         "brief_candidate_score",
         "manual_review_need_score",
         "quality_tier_cn",
+        "quality_tier_en",
         "recommended_use_cn",
+        "recommended_use_en",
         "source_link",
     ]
     display_df(merged[queue_cols].head(30))
 
-    st.markdown("#### 快速复核 | Quick Review")
+    st.markdown(f"#### {title_pair('快速复核', 'Quick Review')}")
     selected_id = st.selectbox(
-        "选择信号 ID | Select signal ID",
+        title_pair("选择信号 ID", "Select Signal ID"),
         merged["signal_id"].astype(str).tolist(),
         format_func=lambda value: f"{value} - {merged[merged['signal_id'].astype(str) == value].iloc[0]['signal'][:90]}",
     )
@@ -1129,43 +1282,45 @@ def render_review_cockpit(conn: sqlite3.Connection) -> None:
     with st.container(border=True):
         st.markdown(f"**{readable_text(selected['signal'])}**")
         st.caption(f"{readable_text(selected['source_name'])} · {readable_text(selected['classification'])} · {readable_text(selected['risk_level'])}")
-        st.markdown(f"[来源 | Source]({readable_text(selected['source_link'])})")
-        st.markdown(f"**质量判断 | Quality:** {selected['quality_tier_cn']} · {selected['brief_candidate_score']}/100")
-        st.markdown(f"**建议用途 | Recommended use:** {readable_text(selected['recommended_use_cn'])}")
-        st.markdown(f"**评分原因 | Reason:** {readable_text(selected['quality_reason_cn'])}")
-        st.markdown(f"**动作模板 | Action template:** {template}")
-        with st.expander("查看原文片段与历史备注 | Raw text and existing notes"):
+        st.markdown(f"[{title_pair('来源', 'Source')}]({readable_text(selected['source_link'])})")
+        st.markdown(f"**{title_pair('质量判断', 'Quality')}:** {ui_text(readable_text(selected['quality_tier_cn']), readable_text(selected.get('quality_tier_en', '')))} · {selected['brief_candidate_score']}/100")
+        st.markdown(f"**{title_pair('建议用途', 'Recommended Use')}:** {ui_text(readable_text(selected['recommended_use_cn']), readable_text(selected.get('recommended_use_en', '')))}")
+        st.markdown(f"**{title_pair('评分原因', 'Reason')}:** {ui_text(readable_text(selected['quality_reason_cn']), readable_text(selected.get('quality_reason_en', '')))}")
+        st.markdown(f"**{title_pair('动作模板', 'Action Template')}:** {readable_text(template)}")
+        with st.expander(title_pair("查看原文片段与历史备注", "Raw Text and Existing Notes")):
             st.write(readable_text(selected.get("raw_text", "")))
             st.write(readable_text(selected.get("reviewer_notes", "")))
             st.write(readable_text(selected.get("recommended_action", "")))
 
     decision_col1, decision_col2, decision_col3, decision_col4, decision_col5 = st.columns(5)
-    if decision_col1.button("保留 reviewed", use_container_width=True):
+    if decision_col1.button(ui_text("保留 reviewed", "Keep Reviewed"), use_container_width=True):
         apply_review_decision(conn, int(selected["signal_id"]), "reviewed", selected["classification"], selected["reviewer_notes"], selected["recommended_action"])
-        st.success("已保留为 reviewed")
+        st.success(ui_text("已保留为 reviewed。", "Kept as reviewed."))
         st.rerun()
-    if decision_col2.button("加入周报候选", use_container_width=True):
+    if decision_col2.button(title_pair("加入周报候选", "Add to Brief"), use_container_width=True):
         apply_review_decision(conn, int(selected["signal_id"]), "brief_candidate", selected["classification"], selected["reviewer_notes"], selected["recommended_action"])
-        st.success("已加入周报候选")
+        st.success(ui_text("已加入周报候选。", "Added to brief candidates."))
         st.rerun()
-    if decision_col3.button("需要回源", use_container_width=True):
+    if decision_col3.button(title_pair("需要回源", "Needs Source Review"), use_container_width=True):
         apply_review_decision(conn, int(selected["signal_id"]), "needs_source_review", selected["classification"], selected["reviewer_notes"], selected["recommended_action"])
-        st.warning("已标记为需要回源")
+        st.warning(ui_text("已标记为需要回源。", "Marked as needing source review."))
         st.rerun()
-    if decision_col4.button("背景保留", use_container_width=True):
+    if decision_col4.button(title_pair("背景保留", "Keep as Background"), use_container_width=True):
         apply_review_decision(conn, int(selected["signal_id"]), "background", selected["classification"], selected["reviewer_notes"], selected["recommended_action"])
-        st.success("已作为背景保留")
+        st.success(ui_text("已作为背景保留。", "Kept as background."))
         st.rerun()
-    if decision_col5.button("排除", use_container_width=True):
+    if decision_col5.button(title_pair("排除", "Reject"), use_container_width=True):
         apply_review_decision(conn, int(selected["signal_id"]), "rejected", selected["classification"], selected["reviewer_notes"], selected["recommended_action"])
-        st.success("已排除")
+        st.success(ui_text("已排除。", "Rejected."))
         st.rerun()
 
-    cockpit_tab1, cockpit_tab2, cockpit_tab3 = st.tabs(["周报候选 Brief Pool", "待验证问题 Questions", "动作模板 Templates"])
+    cockpit_tab1, cockpit_tab2, cockpit_tab3 = st.tabs(
+        [title_pair("周报候选", "Brief Pool"), title_pair("待验证问题", "Questions"), title_pair("动作模板", "Templates")]
+    )
     with cockpit_tab1:
         brief_pool = merged[(merged["brief_candidate_score"] >= 70) & (merged["review_status"].isin(["reviewed", "briefed"]))]
         if brief_pool.empty:
-            st.info("暂无周报候选 | No brief candidates yet.")
+            st.info(ui_text("暂无周报候选。", "No brief candidates yet."))
         else:
             display_df(
                 brief_pool[
@@ -1176,6 +1331,7 @@ def render_review_cockpit(conn: sqlite3.Connection) -> None:
                         "risk_level",
                         "brief_candidate_score",
                         "quality_reason_cn",
+                        "quality_reason_en",
                         "recommended_action",
                         "source_link",
                     ]
@@ -1220,10 +1376,10 @@ def render_review_queue(conn: sqlite3.Connection) -> None:
     )
     display_df(queue.drop(columns=["raw_text"], errors="ignore"))
     if queue.empty:
-        st.info("还没有信号。请先运行 pipeline 或 seed sample records。| No signals yet. Run the pipeline or seed sample records.")
+        st.info(ui_text("还没有信号。请先运行 pipeline 或 seed sample records。", "No signals yet. Run the pipeline or seed sample records."))
         return
 
-    selected_id = st.selectbox("信号 ID | Signal ID", queue["id"].tolist())
+    selected_id = st.selectbox(title_pair("信号 ID", "Signal ID"), queue["id"].tolist())
     selected = queue[queue["id"] == selected_id].iloc[0]
     with st.container(border=True):
         st.markdown(f"**{selected['item_title']}**")
@@ -1231,17 +1387,17 @@ def render_review_queue(conn: sqlite3.Connection) -> None:
         st.write(selected["raw_text"])
 
     status = st.selectbox(
-        "复核状态 | Review status",
+        title_pair("复核状态", "Review Status"),
         ["new", "reviewed", "briefed", "rejected"],
         index=["new", "reviewed", "briefed", "rejected"].index(selected["review_status"]),
-        format_func=lambda value: STATUS_LABELS.get(value, value),
+        format_func=lambda value: option_label(STATUS_LABELS, value),
     )
-    priority = st.slider("优先级 | Priority", min_value=1, max_value=3, value=int(selected["priority"]))
-    notes = st.text_area("研究备注 | Reviewer notes", value=selected["reviewer_notes"] or "")
-    action = st.text_area("下一步行动 | Recommended action", value=selected["recommended_action"] or "")
-    if st.button("保存复核 | Save Review"):
+    priority = st.slider(title_pair("优先级", "Priority"), min_value=1, max_value=3, value=int(selected["priority"]))
+    notes = st.text_area(title_pair("研究备注", "Reviewer Notes"), value=selected["reviewer_notes"] or "")
+    action = st.text_area(title_pair("下一步行动", "Recommended Action"), value=selected["recommended_action"] or "")
+    if st.button(title_pair("保存复核", "Save Review")):
         update_review(conn, int(selected_id), status, priority, notes, action)
-        st.success("复核已更新 | Review updated.")
+        st.success(ui_text("复核已更新。", "Review updated."))
 
 
 def render_brief_draft(conn: sqlite3.Connection) -> None:
@@ -1255,9 +1411,9 @@ def render_brief_draft(conn: sqlite3.Connection) -> None:
     notes = load_recent_notes(conn)
     questions = load_market_questions(conn)
     source_health = load_source_health(conn)
-    content = render_brief(rows, current_week_label(), notes, questions, source_health)
+    content = render_brief(rows, current_week_label(), notes, questions, source_health, language=current_language())
     st.download_button(
-        "下载 Markdown 笔记 | Download Markdown Notes",
+        title_pair("下载 Markdown 笔记", "Download Markdown Notes"),
         data=content,
         file_name=f"zambia_digital_lending_personal_notes_{current_week_label()}.md",
         mime="text/markdown",
@@ -1299,30 +1455,30 @@ def render_research_notes(conn: sqlite3.Connection) -> None:
         LIMIT 100
         """,
     )
-    signal_options = {"不关联信号 | No linked signal": None}
+    signal_options = {title_pair("不关联信号", "No Linked Signal"): None}
     signal_options.update({f"{row.id}: {row.item_title[:90]}": int(row.id) for row in signals.itertuples()})
 
-    st.markdown("#### 新增笔记 | Add Note")
-    selected_signal = st.selectbox("可选关联信号 | Optional linked signal", list(signal_options.keys()))
+    st.markdown(f"#### {title_pair('新增笔记', 'Add Note')}")
+    selected_signal = st.selectbox(title_pair("可选关联信号", "Optional Linked Signal"), list(signal_options.keys()))
     note_type = st.selectbox(
-        "笔记类型 | Note type",
+        title_pair("笔记类型", "Note Type"),
         ["market_observation", "source_quality", "taxonomy_learning", "research_question", "weekly_synthesis", "capability_line"],
-        format_func=lambda value: NOTE_TYPE_LABELS.get(value, value),
+        format_func=lambda value: option_label(NOTE_TYPE_LABELS, value),
     )
-    title = st.text_input("标题 | Title")
-    question = st.text_input("市场问题 | Market question")
+    title = st.text_input(title_pair("标题", "Title"))
+    question = st.text_input(title_pair("市场问题", "Market Question"))
     confidence = st.selectbox(
-        "信心 | Confidence",
+        title_pair("信心", "Confidence"),
         ["medium", "low", "high"],
-        format_func=lambda value: CONFIDENCE_LABELS.get(value, value),
+        format_func=lambda value: option_label(CONFIDENCE_LABELS, value),
     )
-    note = st.text_area("笔记 | Note")
-    if st.button("保存研究笔记 | Save Research Note"):
+    note = st.text_area(title_pair("笔记", "Note"))
+    if st.button(title_pair("保存研究笔记", "Save Research Note")):
         if not title.strip() or not note.strip():
-            st.error("标题和笔记不能为空 | Title and note are required.")
+            st.error(ui_text("标题和笔记不能为空。", "Title and note are required."))
         else:
             add_research_note(conn, signal_options[selected_signal], note_type, title, note, question, confidence)
-            st.success("研究笔记已保存 | Research note saved.")
+            st.success(ui_text("研究笔记已保存。", "Research note saved."))
 
 
 def render_market_questions(conn: sqlite3.Connection) -> None:
@@ -1332,9 +1488,9 @@ def render_market_questions(conn: sqlite3.Connection) -> None:
         "让研究围绕问题推进，而不是围绕数据堆积推进。",
         "Use questions to guide the research loop instead of collecting rows for their own sake.",
     )
-    if st.button("初始化市场问题 | Seed Market Questions"):
+    if st.button(title_pair("初始化市场问题", "Seed Market Questions")):
         seed_market_questions(conn)
-        st.success("市场问题已初始化 | Market questions seeded.")
+        st.success(ui_text("市场问题已初始化。", "Market questions seeded."))
 
     questions = dataframe(
         conn,
@@ -1347,25 +1503,25 @@ def render_market_questions(conn: sqlite3.Connection) -> None:
     display_df(questions)
 
     if questions.empty:
-        st.info("还没有市场问题。先初始化问题以开始结构化研究循环。| No market questions yet. Seed them to start a structured research loop.")
+        st.info(ui_text("还没有市场问题。先初始化问题以开始结构化研究循环。", "No market questions yet. Seed them to start a structured research loop."))
         return
 
-    selected_id = st.selectbox("问题 ID | Question ID", questions["id"].tolist())
+    selected_id = st.selectbox(title_pair("问题 ID", "Question ID"), questions["id"].tolist())
     current = questions[questions["id"] == selected_id].iloc[0]
     st.markdown(f"**{current['question']}**")
     status = st.selectbox(
-        "问题状态 | Question status",
+        title_pair("问题状态", "Question Status"),
         ["open", "investigating", "answered", "parked"],
         index=["open", "investigating", "answered", "parked"].index(current["status"])
         if current["status"] in ["open", "investigating", "answered", "parked"]
         else 0,
-        format_func=lambda value: QUESTION_STATUS_LABELS.get(value, value),
+            format_func=lambda value: option_label(QUESTION_STATUS_LABELS, value),
     )
-    hypothesis = st.text_area("当前假设 | Current hypothesis", value=current["current_hypothesis"] or "")
-    evidence = st.text_area("证据 | Evidence", value=current["evidence"] or "")
-    if st.button("更新市场问题 | Update Market Question"):
+    hypothesis = st.text_area(title_pair("当前假设", "Current Hypothesis"), value=current["current_hypothesis"] or "")
+    evidence = st.text_area(title_pair("证据", "Evidence"), value=current["evidence"] or "")
+    if st.button(title_pair("更新市场问题", "Update Market Question")):
         update_market_question(conn, int(selected_id), status, hypothesis, evidence)
-        st.success("市场问题已更新 | Market question updated.")
+        st.success(ui_text("市场问题已更新。", "Market question updated."))
 
 
 def render_payment_rails(conn: sqlite3.Connection) -> None:
@@ -1389,9 +1545,9 @@ def render_payment_rails(conn: sqlite3.Connection) -> None:
         st.markdown(
             f"""
             <div class="rail-card">
-                <strong>市场问题 | Market question</strong><br>
+                <strong>{title_pair("市场问题", "Market Question")}</strong><br>
                 {current['question']}<br><br>
-                <strong>当前假设 | Current hypothesis</strong><br>
+                <strong>{title_pair("当前假设", "Current Hypothesis")}</strong><br>
                 {current["current_hypothesis"] or ""}<br><br>
                 <span class="quiet">{current["evidence"] or ""}</span>
             </div>
@@ -1435,14 +1591,14 @@ def render_payment_rails(conn: sqlite3.Connection) -> None:
         """,
     )
     col1, col2, col3 = st.columns(3)
-    col1.metric("已复核轨道信号 | Reviewed Rails Signals", len(rails))
-    col2.metric("高优先级 | Priority 1", int((rails["priority"] == 1).sum()) if not rails.empty else 0)
-    col3.metric("需手读/OCR | Manual Read/OCR", int(rails["item_title"].str.contains("metadata-only", case=False, na=False).sum()) if not rails.empty else 0)
+    col1.metric(title_pair("已复核轨道信号", "Reviewed Rails Signals"), len(rails))
+    col2.metric(title_pair("高优先级", "Priority 1"), int((rails["priority"] == 1).sum()) if not rails.empty else 0)
+    col3.metric(title_pair("需手读/OCR", "Manual Read/OCR"), int(rails["item_title"].str.contains("metadata-only", case=False, na=False).sum()) if not rails.empty else 0)
     display_df(rails)
 
     manual = rails[rails["item_title"].str.contains("metadata-only", case=False, na=False)] if not rails.empty else rails
     if not manual.empty:
-        st.markdown("#### 手动阅读/OCR 锚点 | Manual-Read / OCR Anchors")
+        st.markdown(f"#### {title_pair('手动阅读/OCR 锚点', 'Manual-Read / OCR Anchors')}")
         display_df(
             manual[["id", "item_title", "item_url", "recommended_action"]],
         )
@@ -1455,7 +1611,7 @@ def render_capability_tracker(conn: sqlite3.Connection) -> None:
         "这里不是 KPI 面板，而是记录你每周具体学到了什么、哪条能力线更清楚了。",
         "This is a learning ledger: what became clearer this week, and which capability line advanced.",
     )
-    if st.button("初始化学习目标 | Seed Learning Goals"):
+    if st.button(title_pair("初始化学习目标", "Seed Learning Goals")):
         goals = [
             (
                 "scrapling_public_sources",
@@ -1496,7 +1652,7 @@ def render_capability_tracker(conn: sqlite3.Connection) -> None:
                 (goal_key, area, goal),
             )
         conn.commit()
-        st.success("学习目标已初始化 | Learning goals seeded.")
+        st.success(ui_text("学习目标已初始化。", "Learning goals seeded."))
 
     goals_df = dataframe(
         conn,
@@ -1509,28 +1665,28 @@ def render_capability_tracker(conn: sqlite3.Connection) -> None:
     display_df(goals_df)
 
     if not goals_df.empty:
-        selected_goal = st.selectbox("目标 ID | Goal ID", goals_df["id"].tolist())
+        selected_goal = st.selectbox(title_pair("目标 ID", "Goal ID"), goals_df["id"].tolist())
         current = goals_df[goals_df["id"] == selected_goal].iloc[0]
         status = st.selectbox(
-            "目标状态 | Goal status",
+            title_pair("目标状态", "Goal Status"),
             ["active", "in_progress", "done", "paused"],
             index=["active", "in_progress", "done", "paused"].index(current["status"])
             if current["status"] in ["active", "in_progress", "done", "paused"]
             else 0,
-            format_func=lambda value: GOAL_STATUS_LABELS.get(value, value),
+            format_func=lambda value: option_label(GOAL_STATUS_LABELS, value),
         )
-        evidence = st.text_area("证据/学习证明 | Evidence / learning proof", value=current["evidence"] or "")
-        if st.button("更新学习目标 | Update Learning Goal"):
+        evidence = st.text_area(title_pair("证据/学习证明", "Evidence / Learning Proof"), value=current["evidence"] or "")
+        if st.button(title_pair("更新学习目标", "Update Learning Goal")):
             update_learning_goal(conn, int(selected_goal), status, evidence)
-            st.success("学习目标已更新 | Learning goal updated.")
+            st.success(ui_text("学习目标已更新。", "Learning goal updated."))
 
-    st.markdown("#### 平台统计 | Platform Stats")
+    st.markdown(f"#### {title_pair('平台统计', 'Platform Stats')}")
     col1, col2, col3 = st.columns(3)
-    col1.metric("信号 | Signals", int(conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]))
-    col2.metric("研究笔记 | Research Notes", int(conn.execute("SELECT COUNT(*) FROM research_notes").fetchone()[0]))
-    col3.metric("来源运行 | Source Runs", int(conn.execute("SELECT COUNT(*) FROM source_runs").fetchone()[0]))
+    col1.metric(title_pair("信号", "Signals"), int(conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]))
+    col2.metric(title_pair("研究笔记", "Research Notes"), int(conn.execute("SELECT COUNT(*) FROM research_notes").fetchone()[0]))
+    col3.metric(title_pair("来源运行", "Source Runs"), int(conn.execute("SELECT COUNT(*) FROM source_runs").fetchone()[0]))
 
-    st.markdown("#### 最近来源运行 | Recent Source Runs")
+    st.markdown(f"#### {title_pair('最近来源运行', 'Recent Source Runs')}")
     display_df(
         dataframe(
             conn,
@@ -1552,24 +1708,13 @@ def render_guardrails() -> None:
         "This is a personal public-source research tool, not a legal opinion, compliance approval, or commercial deliverable.",
     )
     st.markdown(
-        """
+        f"""
 <div class="guardrail-band">
-<strong>中文</strong><br>
-- 只使用公开网页、公开 app listing、官方公告、公开新闻/评论，以及你手动批准的公开 watchlist。<br>
-- 不收集借款人记录、私人消息、客户数据库、专有规则、非公开报告或受限页面。<br>
-- 不绕过登录、付费墙、CAPTCHA、访问频率限制或访问控制。<br>
-- 所有个人结论都要保留来源链接，并使用保守措辞。<br>
-- 使用“潜在信号”“需要验证”“应进一步人工检查”等表述。<br>
-- 不把输出表达为法律意见、监管认证或合规批准。<br>
-- 在存在真实或感知的职业冲突风险时，不商业化输出。<br><br>
-<strong>English</strong><br>
-- Use only public webpages, public app listings, official announcements, public news/reviews, and manually approved public watchlists.<br>
-- Do not collect borrower records, private messages, client databases, proprietary rules, non-public reports, or restricted pages.<br>
-- Do not bypass login, paywalls, CAPTCHA, rate limits, or access controls.<br>
-- Keep personal conclusions source-linked and conservative.<br>
-- Use language such as "potential signal", "requires verification", and "manual review needed".<br>
-- Do not present this as legal advice, regulatory certification, or compliance approval.<br>
-- Do not commercialize outputs while real or perceived conflict-of-interest risk remains.
+<strong>{title_pair("当前边界", "Current Guardrails")}</strong><br>
+{ui_text(
+"- 只使用公开网页、公开 app listing、官方公告、公开新闻/评论，以及你手动批准的公开 watchlist。<br>- 不收集借款人记录、私人消息、客户数据库、专有规则、非公开报告或受限页面。<br>- 不绕过登录、付费墙、CAPTCHA、访问频率限制或访问控制。<br>- 所有个人结论都要保留来源链接，并使用保守措辞。<br>- 使用“潜在信号”“需要验证”“应进一步人工检查”等表述。<br>- 不把输出表达为法律意见、监管认证或合规批准。<br>- 在存在真实或感知的职业冲突风险时，不商业化输出。",
+"- Use only public webpages, public app listings, official announcements, public news/reviews, and manually approved public watchlists.<br>- Do not collect borrower records, private messages, client databases, proprietary rules, non-public reports, or restricted pages.<br>- Do not bypass login, paywalls, CAPTCHA, rate limits, or access controls.<br>- Keep personal conclusions source-linked and conservative.<br>- Use language such as \"potential signal\", \"requires verification\", and \"manual review needed\".<br>- Do not present this as legal advice, regulatory certification, or compliance approval.<br>- Do not commercialize outputs while real or perceived conflict-of-interest risk remains."
+)}
 </div>
 """
         ,
@@ -1578,44 +1723,47 @@ def render_guardrails() -> None:
 
 
 def render_overview(conn: sqlite3.Connection) -> None:
-    st.title(f"赞比亚数字借贷个人研究雷达 {APP_VERSION} | Zambia Digital Lending Personal Research Radar")
-    st.caption(f"{APP_VERSION_LABEL} · 公开来源市场研究工作台 | Public-source research workspace for market understanding and capability-building.")
+    st.title(f"{ui_text('赞比亚数字借贷个人研究雷达', 'Zambia Digital Lending Personal Research Radar')} {APP_VERSION}")
+    st.caption(
+        f"{APP_VERSION_LABEL} · "
+        f"{ui_text('公开来源市场研究工作台，用于市场理解和能力建设。', 'Public-source research workspace for market understanding and capability-building.')}"
+    )
     st.markdown(
-        """
+        f"""
         <div class="section-note">
-        中文：当前目标是能力建设和个人市场理解，不做商业交付，不使用私人/雇主/借款人数据。<br>
-        <span class="quiet">English: The current goal is capability-building and personal market understanding, not commercial delivery, and not private, employer, or borrower data use.</span>
+        {ui_text("当前目标是能力建设和个人市场理解，不做商业交付，不使用私人/雇主/借款人数据。", "The current goal is capability-building and personal market understanding, not commercial delivery, and not private, employer, or borrower data use.")}
         </div>
         """,
         unsafe_allow_html=True,
     )
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("已复核 | Reviewed", count_rows(conn, "SELECT COUNT(*) FROM reviews WHERE review_status = 'reviewed'"))
-    col2.metric("待审 | New", count_rows(conn, "SELECT COUNT(*) FROM reviews WHERE review_status = 'new'"))
-    col3.metric("研究笔记 | Notes", count_rows(conn, "SELECT COUNT(*) FROM research_notes"))
-    col4.metric("市场问题 | Questions", count_rows(conn, "SELECT COUNT(*) FROM market_questions"))
+    col1.metric(title_pair("已复核", "Reviewed"), count_rows(conn, "SELECT COUNT(*) FROM reviews WHERE review_status = 'reviewed'"))
+    col2.metric(title_pair("待审", "New"), count_rows(conn, "SELECT COUNT(*) FROM reviews WHERE review_status = 'new'"))
+    col3.metric(title_pair("研究笔记", "Notes"), count_rows(conn, "SELECT COUNT(*) FROM research_notes"))
+    col4.metric(title_pair("市场问题", "Questions"), count_rows(conn, "SELECT COUNT(*) FROM market_questions"))
 
 
 def main() -> None:
     apply_app_style()
+    render_language_switcher()
     conn = ensure_db()
     render_overview(conn)
     tabs = st.tabs(
         [
-            "健康 Health",
-            "数据源 Sources",
-            "新信号 New",
-            "业务解读 Intelligence",
-            "竞品 Watch",
-            "竞品矩阵 Matrix",
-            "复核驾驶舱 Cockpit",
-            "复核 Queue",
-            "笔记 Notes",
-            "问题 Questions",
-            "支付轨道 Payment Rails",
-            "周报 Weekly Notes",
-            "能力 Capability",
-            "护栏 Guardrails",
+            title_pair("健康", "Health"),
+            title_pair("数据源", "Sources"),
+            title_pair("新信号", "New Signals"),
+            title_pair("业务解读", "Intelligence"),
+            title_pair("竞品观察", "Competitor Watch"),
+            title_pair("竞品矩阵", "Competitor Matrix"),
+            title_pair("复核驾驶舱", "Review Cockpit"),
+            title_pair("复核队列", "Review Queue"),
+            title_pair("笔记", "Notes"),
+            title_pair("问题", "Questions"),
+            title_pair("支付轨道", "Payment Rails"),
+            title_pair("周报", "Weekly Notes"),
+            title_pair("能力", "Capability"),
+            title_pair("护栏", "Guardrails"),
         ]
     )
     with tabs[0]:

@@ -725,12 +725,20 @@ def escape_cell(value: object) -> str:
     return text.replace("|", "\\|").replace("\n", " ").strip()
 
 
-def count_markdown_table(rows: list[dict[str, object]], field: str, title_cn: str, title_en: str) -> str:
+def choose_text(cn: str, en: str, language: str = "zh") -> str:
+    return en if language == "en" else cn
+
+
+def language_field(base: str, language: str = "zh") -> str:
+    return f"{base}_en" if language == "en" else f"{base}_cn"
+
+
+def count_markdown_table(rows: list[dict[str, object]], field: str, title_cn: str, title_en: str, language: str = "zh") -> str:
     counts = Counter(normalize_text(row.get(field)) or "未分类 | Unclassified" for row in rows)
     if not counts:
-        return "_暂无数据 | No data._"
+        return choose_text("_暂无数据。_", "_No data._", language)
     lines = [
-        f"| {title_cn} {title_en} | 数量 Count |",
+        choose_text(f"| {title_cn} | 数量 |", f"| {title_en} | Count |", language),
         "| --- | ---: |",
     ]
     for label, count in counts.most_common():
@@ -738,17 +746,17 @@ def count_markdown_table(rows: list[dict[str, object]], field: str, title_cn: st
     return "\n".join(lines)
 
 
-def top_gap_table(rows: list[dict[str, object]]) -> str:
+def top_gap_table(rows: list[dict[str, object]], language: str = "zh") -> str:
     gap_counter: Counter[str] = Counter()
     for row in rows:
-        for gap in normalize_text(row.get("gap_flags_cn")).split("；"):
+        for gap in normalize_text(row.get(language_field("gap_flags", language))).split("；"):
             gap = gap.strip()
             if gap and gap != "暂无核心字段缺口":
                 gap_counter[gap] += 1
     if not gap_counter:
-        return "_暂无核心字段缺口 | No core field gaps._"
+        return choose_text("_暂无核心字段缺口。_", "_No core field gaps._", language)
     lines = [
-        "| 缺口 Gap | 出现次数 Count |",
+        choose_text("| 缺口 | 出现次数 |", "| Gap | Count |", language),
         "| --- | ---: |",
     ]
     for gap, count in gap_counter.most_common():
@@ -756,14 +764,18 @@ def top_gap_table(rows: list[dict[str, object]]) -> str:
     return "\n".join(lines)
 
 
-def matrix_markdown_table(rows: Iterable[dict[str, object]], limit: int | None = None) -> str:
+def matrix_markdown_table(rows: Iterable[dict[str, object]], limit: int | None = None, language: str = "zh") -> str:
     selected = list(rows)
     if limit is not None:
         selected = selected[:limit]
     if not selected:
-        return "_暂无竞品产品矩阵 | No competitor product matrix rows yet._"
+        return choose_text("_暂无竞品产品矩阵。_", "_No competitor product matrix rows yet._", language)
     lines = [
-        "| 机构 Institution | 产品/信号 Product/Signal | 定位 Positioning | 产品层 Product Layer | 额度档 Limit Tier | 完整度 Score | 运营风险焦点 Ops Focus | 关键缺口 Key Gaps | 来源 Sources |",
+        choose_text(
+            "| 机构 | 产品/信号 | 定位 | 产品层 | 额度档 | 完整度 | 运营风险焦点 | 关键缺口 | 来源 |",
+            "| Institution | Product/Signal | Positioning | Product Layer | Limit Tier | Score | Ops Focus | Key Gaps | Sources |",
+            language,
+        ),
         "| --- | --- | --- | --- | --- | ---: | --- | --- | --- |",
     ]
     for row in selected:
@@ -773,12 +785,12 @@ def matrix_markdown_table(rows: Iterable[dict[str, object]], limit: int | None =
                 [
                     escape_cell(row["institution"]),
                     escape_cell(row["product_or_signal"]),
-                    escape_cell(f"{row['competitor_positioning_cn']} / {row['competitor_positioning_en']}"),
-                    escape_cell(f"{row['product_layer_cn']} / {row['product_layer_en']}"),
-                    escape_cell(f"{row['limit_amount']} - {row['limit_tier_cn']}"),
+                    escape_cell(row[language_field("competitor_positioning", language)]),
+                    escape_cell(row[language_field("product_layer", language)]),
+                    escape_cell(f"{row['limit_amount']} - {row[language_field('limit_tier', language)]}"),
                     escape_cell(row["data_completeness_score"]),
-                    escape_cell(row["operating_risk_focus_cn"]),
-                    escape_cell(row["gap_flags_cn"]),
+                    escape_cell(row[language_field("operating_risk_focus", language)]),
+                    escape_cell(row[language_field("gap_flags", language)]),
                     row["source_links"],
                 ]
             )
@@ -787,7 +799,7 @@ def matrix_markdown_table(rows: Iterable[dict[str, object]], limit: int | None =
     return "\n".join(lines)
 
 
-def render_matrix_markdown(rows: list[dict[str, object]]) -> str:
+def render_matrix_markdown(rows: list[dict[str, object]], language: str = "zh") -> str:
     institutions = sorted({row["institution"] for row in rows})
     direct_limit_rows = [row for row in rows if row["limit_amount"] and row["limit_amount"] != "Not captured" and row["limit_amount"] != "Not applicable"]
     payment_rows = [row for row in rows if row["payment_or_disbursement"] and row["payment_or_disbursement"] != "Not captured"]
@@ -798,58 +810,70 @@ def render_matrix_markdown(rows: list[dict[str, object]]) -> str:
         and row["support_privacy_ops"] != "No dedicated support/privacy detail captured"
     ]
     average_score = round(sum(int(row.get("data_completeness_score") or 0) for row in rows) / len(rows)) if rows else 0
-    return f"""# 竞品产品矩阵 | Competitor Product Matrix - {today_label()}
+    product_layer_field = language_field("product_layer", language)
+    limit_tier_field = language_field("limit_tier", language)
+    speed_tier_field = language_field("speed_tier", language)
+    payment_maturity_field = language_field("payment_maturity", language)
+    competitor_positioning_field = language_field("competitor_positioning", language)
+    reading_method = choose_text(
+        "- 先比较额度、期限、速度承诺，再比较支付轨道和客服/隐私入口。\n"
+        "- 把 K500/K6,000 这类短期小额产品与 K250,000/K1,000,000 这类个人/SME 贷款分开看。\n"
+        "- 对 Coming soon、instant、30 seconds、24hrs 等营销语保持保守，回源确认它指申请、审批还是实际放款。\n"
+        "- 完整度分数是研究字段完整度，不是产品质量分数；分数低通常代表下一步要继续补证。\n"
+        "- Google Play listing 和公开评论层仍未纳入默认矩阵，需要单独确认后启用。",
+        "- Compare limits, tenor, and speed promises first, then payment rails and support/privacy entry points.\n"
+        "- Separate short-term small-ticket products such as K500/K6,000 from personal/SME loans such as K250,000/K1,000,000.\n"
+        "- Treat marketing language such as Coming soon, instant, 30 seconds, and 24hrs conservatively; source-check whether it refers to application, approval, or actual payout.\n"
+        "- Completeness is a research-field score, not a product-quality score; low scores usually mean the next step is evidence collection.\n"
+        "- Google Play listings and public-review layers are still not part of the default matrix and should be enabled only after separate confirmation.",
+        language,
+    )
+    return f"""# {choose_text('竞品产品矩阵', 'Competitor Product Matrix', language)} - {today_label()}
 
-中文：这是一份基于已复核公开来源信号整理的个人研究矩阵。它不是完整市场报告，也不是法律/合规结论；字段为空代表当前公开信号未捕捉到，不代表来源页面一定没有。
+{choose_text('这是一份基于已复核公开来源信号整理的个人研究矩阵。它不是完整市场报告，也不是法律/合规结论；字段为空代表当前公开信号未捕捉到，不代表来源页面一定没有。', 'This is a personal research matrix based on reviewed public-source signals. It is not a complete market report or legal/compliance conclusion. Blank or "not captured" fields mean the current signal did not capture the information, not that the source page lacks it.', language)}
 
-English: This is a personal research matrix based on reviewed public-source signals. It is not a complete market report or legal/compliance conclusion. Blank or "not captured" fields mean the current signal did not capture the information, not that the source page lacks it.
+## 1. {choose_text('摘要', 'Summary', language)}
 
-## 1. 摘要 | Summary
+- {choose_text('机构数', 'Institutions', language)}: {len(institutions)}
+- {choose_text('矩阵行', 'Matrix rows', language)}: {len(rows)}
+- {choose_text('有明确额度', 'Rows with explicit limit', language)}: {len(direct_limit_rows)}
+- {choose_text('有支付/放款线索', 'Rows with payment/payout clues', language)}: {len(payment_rows)}
+- {choose_text('有客服/隐私/账户控制线索', 'Rows with support/privacy/account-control clues', language)}: {len(ops_rows)}
+- {choose_text('平均公开字段完整度', 'Average public-field completeness', language)}: {average_score}/100
 
-- 机构数 | Institutions: {len(institutions)}
-- 矩阵行 | Matrix rows: {len(rows)}
-- 有明确额度 | Rows with explicit limit: {len(direct_limit_rows)}
-- 有支付/放款线索 | Rows with payment/payout clues: {len(payment_rows)}
-- 有客服/隐私/账户控制线索 | Rows with support/privacy/account-control clues: {len(ops_rows)}
-- 平均公开字段完整度 | Average public-field completeness: {average_score}/100
+## 2. {choose_text('横向比较摘要', 'Comparison Summary', language)}
 
-## 2. 横向比较摘要 | Comparison Summary
+### 2.1 {choose_text('产品层', 'Product Layer', language)}
 
-### 2.1 产品层 | Product Layer
+{count_markdown_table(rows, product_layer_field, "产品层", "Product Layer", language)}
 
-{count_markdown_table(rows, "product_layer_cn", "产品层", "Product Layer")}
+### 2.2 {choose_text('额度档', 'Limit Tier', language)}
 
-### 2.2 额度档 | Limit Tier
+{count_markdown_table(rows, limit_tier_field, "额度档", "Limit Tier", language)}
 
-{count_markdown_table(rows, "limit_tier_cn", "额度档", "Limit Tier")}
+### 2.3 {choose_text('速度承诺', 'Speed Promise', language)}
 
-### 2.3 速度承诺 | Speed Promise
+{count_markdown_table(rows, speed_tier_field, "速度承诺", "Speed Promise", language)}
 
-{count_markdown_table(rows, "speed_tier_cn", "速度承诺", "Speed Promise")}
+### 2.4 {choose_text('支付/放款成熟度', 'Payment/Payout Maturity', language)}
 
-### 2.4 支付/放款成熟度 | Payment/Payout Maturity
+{count_markdown_table(rows, payment_maturity_field, "支付/放款成熟度", "Payment/Payout Maturity", language)}
 
-{count_markdown_table(rows, "payment_maturity_cn", "支付/放款成熟度", "Payment/Payout Maturity")}
+### 2.5 {choose_text('主要信息缺口', 'Main Evidence Gaps', language)}
 
-### 2.5 主要信息缺口 | Main Evidence Gaps
+{top_gap_table(rows, language)}
 
-{top_gap_table(rows)}
+### 2.6 {choose_text('竞品定位', 'Competitor Positioning', language)}
 
-### 2.6 竞品定位 | Competitor Positioning
+{count_markdown_table(rows, competitor_positioning_field, "竞品定位", "Competitor Positioning", language)}
 
-{count_markdown_table(rows, "competitor_positioning_cn", "竞品定位", "Competitor Positioning")}
+## 3. {choose_text('产品矩阵 3.0', 'Product Matrix 3.0', language)}
 
-## 3. 产品矩阵 2.0 | Product Matrix 2.0
+{matrix_markdown_table(rows, language=language)}
 
-{matrix_markdown_table(rows)}
+## 4. {choose_text('阅读方法', 'How To Read', language)}
 
-## 4. 阅读方法 | How To Read
-
-- 先比较额度、期限、速度承诺，再比较支付轨道和客服/隐私入口。
-- 把 K500/K6,000 这类短期小额产品与 K250,000/K1,000,000 这类个人/SME 贷款分开看。
-- 对 Coming soon、instant、30 seconds、24hrs 等营销语保持保守，回源确认它指申请、审批还是实际放款。
-- 完整度分数是研究字段完整度，不是产品质量分数；分数低通常代表下一步要继续补证。
-- Google Play listing 和公开评论层仍未纳入默认矩阵，需要单独确认后启用。
+{reading_method}
 """
 
 
@@ -873,6 +897,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--brief-dir", type=Path, default=DEFAULT_BRIEF_DIR)
+    parser.add_argument("--language", choices=["zh", "en"], default="zh")
     return parser.parse_args()
 
 
@@ -884,7 +909,7 @@ def main() -> int:
     rows = build_product_matrix(conn)
     csv_path = write_csv(rows, args.output_dir / "lending_ops_competitor_product_matrix.csv")
     md_path = write_markdown(
-        render_matrix_markdown(rows),
+        render_matrix_markdown(rows, language=args.language),
         args.brief_dir / f"zambia_digital_lending_competitor_product_matrix_{today_label()}.md",
     )
     print(f"Wrote {len(rows)} matrix row(s) to {csv_path}")
