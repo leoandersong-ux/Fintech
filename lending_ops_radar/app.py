@@ -32,9 +32,10 @@ from lending_ops_radar.intelligence import (
 from lending_ops_radar.competitor_matrix import build_product_matrix, render_matrix_markdown
 from lending_ops_radar.pipeline import DEFAULT_SOURCES, connect, init_db, load_sources, upsert_sources
 from lending_ops_radar.quality import build_quality_rows, summary_counts
+from lending_ops_radar.version import APP_VERSION, APP_VERSION_LABEL
 
 
-st.set_page_config(page_title="个人研究雷达 | Lending Radar", layout="wide")
+st.set_page_config(page_title=f"个人研究雷达 {APP_VERSION} | Lending Radar", layout="wide")
 
 APP_CSS = """
 <style>
@@ -267,6 +268,28 @@ NOTE_TYPE_LABELS = {
 }
 
 
+REVIEW_DECISIONS = {
+    "reviewed": "保留为 reviewed | Keep reviewed",
+    "brief_candidate": "加入周报候选 | Add to brief candidate",
+    "needs_source_review": "需要回源 | Needs source review",
+    "background": "背景保留 | Keep as background",
+    "rejected": "排除 rejected | Reject",
+}
+
+ACTION_TEMPLATES = {
+    "fees": "回源核对 APR、服务费、逾期费、还款示例和披露位置。| Source-check APR, service fees, late fees, repayment examples, and disclosure placement.",
+    "disbursement": "回源核对放款、还款、失败交易、对账和移动钱/银行轨道依赖。| Source-check payout, repayment, failed transactions, reconciliation, and mobile-money/bank rail dependency.",
+    "repayment": "回源确认还款频率、扣款方式、宽限期、逾期处理和客户解释口径。| Source-check repayment frequency, deduction method, grace period, late handling, and borrower-facing explanation.",
+    "privacy": "回源阅读隐私、权限、账户删除和投诉入口；不要把页面措辞直接当作合规结论。| Source-review privacy, permissions, account deletion, and complaint routes; do not treat page wording as a compliance conclusion.",
+    "complaint": "核对投诉入口、处理时限、证据留存、升级路径和重复问题复盘机制。| Check complaint intake, timelines, evidence retention, escalation, and repeat-issue review.",
+    "collections": "核对催收话术、触达频率、联系人使用、争议处理和隐私边界。| Check collections scripts, contact frequency, contact-person use, dispute handling, and privacy boundaries.",
+    "fraud": "核对身份、设备、钱包、放款和客服环节的欺诈暴露点。| Check fraud exposure across identity, device, wallet, payout, and support flows.",
+    "regulatory": "回源确认文件日期、适用范围和对产品/支付/客服流程的潜在影响。| Source-check document date, scope, and possible impact on product, payment, or support processes.",
+    "competitor_change": "回源确认额度、期限、费用、速度承诺、支付/放款路径和客服/隐私入口；只作为公开竞品信号记录。| Source-review limit, tenor, fees, speed promise, payment/payout path, and support/privacy route; keep as public competitor signal.",
+    "news_signal": "作为市场/舆情背景保留，除非能连接到具体运营流程。| Keep as market/sentiment context unless it connects to a concrete operating process.",
+}
+
+
 def apply_app_style() -> None:
     st.markdown(APP_CSS, unsafe_allow_html=True)
 
@@ -337,6 +360,53 @@ def update_review(conn: sqlite3.Connection, signal_id: int, status: str, priorit
         (status, priority, notes, action, signal_id),
     )
     conn.commit()
+
+
+def action_template_for(classification: object) -> str:
+    return ACTION_TEMPLATES.get(
+        str(classification or ""),
+        "回源复核，并补写一条个人解释笔记。| Review the source and add one personal interpretation note.",
+    )
+
+
+def append_review_note(existing: object, addition: str) -> str:
+    base = "" if looks_question_garbled(existing) else str(existing or "").strip()
+    if not base:
+        return addition
+    if addition in base:
+        return base
+    return f"{base}\n{addition}"
+
+
+def apply_review_decision(
+    conn: sqlite3.Connection,
+    signal_id: int,
+    decision: str,
+    classification: object,
+    existing_notes: object,
+    existing_action: object,
+) -> None:
+    template = action_template_for(classification)
+    action = "" if looks_question_garbled(existing_action) else str(existing_action or "").strip()
+    action = action or template
+    note_suffix = f"{APP_VERSION} quick decision: {REVIEW_DECISIONS.get(decision, decision)}."
+    if decision == "reviewed":
+        update_review(conn, signal_id, "reviewed", 2, append_review_note(existing_notes, note_suffix), action)
+    elif decision == "brief_candidate":
+        update_review(conn, signal_id, "reviewed", 1, append_review_note(existing_notes, note_suffix), f"周报候选：{action}")
+    elif decision == "needs_source_review":
+        update_review(conn, signal_id, "new", 1, append_review_note(existing_notes, note_suffix), f"需要回源复核：{template}")
+    elif decision == "background":
+        update_review(conn, signal_id, "reviewed", 3, append_review_note(existing_notes, note_suffix), action)
+    elif decision == "rejected":
+        update_review(
+            conn,
+            signal_id,
+            "rejected",
+            3,
+            append_review_note(existing_notes, note_suffix),
+            "排除：当前信号对个人研究价值不足或重复。| Rejected: low value or duplicate for this personal research workflow.",
+        )
 
 
 def add_research_note(
@@ -959,6 +1029,178 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
     st.markdown(markdown_content)
 
 
+def review_workflow_rows(conn: sqlite3.Connection) -> pd.DataFrame:
+    return dataframe(
+        conn,
+        """
+        SELECT
+            s.id,
+            s.source_id,
+            s.source_name,
+            s.source_url,
+            s.item_title,
+            s.item_url,
+            s.classification,
+            s.risk_level,
+            s.raw_text,
+            s.last_seen_at,
+            r.review_status,
+            r.priority,
+            r.reviewer_notes,
+            r.recommended_action
+        FROM signals s
+        JOIN reviews r ON r.signal_id = s.id
+        WHERE r.review_status != 'rejected'
+        ORDER BY r.review_status = 'new' DESC, r.priority ASC, s.last_seen_at DESC
+        """,
+    )
+
+
+def render_review_cockpit(conn: sqlite3.Connection) -> None:
+    section_header(
+        "复核驾驶舱",
+        "Review Cockpit",
+        "把 v0.3 的质量评分变成实际复核工作流：优先看、套模板、做决定、进入周报候选或回源队列。",
+        "Turns v0.3 quality scoring into a real review workflow: prioritize, apply templates, decide, and move items into brief candidates or source-review queue.",
+    )
+    rows = review_workflow_rows(conn)
+    if rows.empty:
+        st.info("没有可复核信号 | No reviewable signals.")
+        return
+
+    quality_df = pd.DataFrame(build_quality_rows(rows.to_dict("records")))
+    quality_df["brief_candidate_score"] = pd.to_numeric(quality_df["brief_candidate_score"], errors="coerce").fillna(0).astype(int)
+    quality_df["manual_review_need_score"] = pd.to_numeric(quality_df["manual_review_need_score"], errors="coerce").fillna(0).astype(int)
+    rows = rows.copy()
+    rows["_merge_signal_id"] = rows["id"].astype(str)
+    merged = quality_df.merge(
+        rows[
+            [
+                "id",
+                "_merge_signal_id",
+                "source_id",
+                "source_name",
+                "source_url",
+                "item_title",
+                "item_url",
+                "raw_text",
+                "last_seen_at",
+                "reviewer_notes",
+                "recommended_action",
+            ]
+        ],
+        left_on="signal_id",
+        right_on="_merge_signal_id",
+        how="left",
+    )
+
+    counts = summary_counts(quality_df.to_dict("records"))
+    new_count = int((merged["review_status"] == "new").sum())
+    candidate_count = int((merged["brief_candidate_score"] >= 70).sum())
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("待处理 | New", new_count)
+    col2.metric("周报候选 | Brief Candidates", candidate_count)
+    col3.metric("优先阅读 | Priority Reads", counts["tier"].get("优先阅读", 0))
+    col4.metric("高回源需求 | High Review Need", int((merged["manual_review_need_score"] >= 72).sum()))
+
+    st.markdown("#### 优先队列 | Priority Queue")
+    queue_cols = [
+        "signal_id",
+        "signal",
+        "classification",
+        "risk_level",
+        "review_status",
+        "priority",
+        "brief_candidate_score",
+        "manual_review_need_score",
+        "quality_tier_cn",
+        "recommended_use_cn",
+        "source_link",
+    ]
+    display_df(merged[queue_cols].head(30))
+
+    st.markdown("#### 快速复核 | Quick Review")
+    selected_id = st.selectbox(
+        "选择信号 ID | Select signal ID",
+        merged["signal_id"].astype(str).tolist(),
+        format_func=lambda value: f"{value} - {merged[merged['signal_id'].astype(str) == value].iloc[0]['signal'][:90]}",
+    )
+    selected = merged[merged["signal_id"].astype(str) == selected_id].iloc[0]
+    template = action_template_for(selected["classification"])
+
+    with st.container(border=True):
+        st.markdown(f"**{readable_text(selected['signal'])}**")
+        st.caption(f"{readable_text(selected['source_name'])} · {readable_text(selected['classification'])} · {readable_text(selected['risk_level'])}")
+        st.markdown(f"[来源 | Source]({readable_text(selected['source_link'])})")
+        st.markdown(f"**质量判断 | Quality:** {selected['quality_tier_cn']} · {selected['brief_candidate_score']}/100")
+        st.markdown(f"**建议用途 | Recommended use:** {readable_text(selected['recommended_use_cn'])}")
+        st.markdown(f"**评分原因 | Reason:** {readable_text(selected['quality_reason_cn'])}")
+        st.markdown(f"**动作模板 | Action template:** {template}")
+        with st.expander("查看原文片段与历史备注 | Raw text and existing notes"):
+            st.write(readable_text(selected.get("raw_text", "")))
+            st.write(readable_text(selected.get("reviewer_notes", "")))
+            st.write(readable_text(selected.get("recommended_action", "")))
+
+    decision_col1, decision_col2, decision_col3, decision_col4, decision_col5 = st.columns(5)
+    if decision_col1.button("保留 reviewed", use_container_width=True):
+        apply_review_decision(conn, int(selected["signal_id"]), "reviewed", selected["classification"], selected["reviewer_notes"], selected["recommended_action"])
+        st.success("已保留为 reviewed")
+        st.rerun()
+    if decision_col2.button("加入周报候选", use_container_width=True):
+        apply_review_decision(conn, int(selected["signal_id"]), "brief_candidate", selected["classification"], selected["reviewer_notes"], selected["recommended_action"])
+        st.success("已加入周报候选")
+        st.rerun()
+    if decision_col3.button("需要回源", use_container_width=True):
+        apply_review_decision(conn, int(selected["signal_id"]), "needs_source_review", selected["classification"], selected["reviewer_notes"], selected["recommended_action"])
+        st.warning("已标记为需要回源")
+        st.rerun()
+    if decision_col4.button("背景保留", use_container_width=True):
+        apply_review_decision(conn, int(selected["signal_id"]), "background", selected["classification"], selected["reviewer_notes"], selected["recommended_action"])
+        st.success("已作为背景保留")
+        st.rerun()
+    if decision_col5.button("排除", use_container_width=True):
+        apply_review_decision(conn, int(selected["signal_id"]), "rejected", selected["classification"], selected["reviewer_notes"], selected["recommended_action"])
+        st.success("已排除")
+        st.rerun()
+
+    cockpit_tab1, cockpit_tab2, cockpit_tab3 = st.tabs(["周报候选 Brief Pool", "待验证问题 Questions", "动作模板 Templates"])
+    with cockpit_tab1:
+        brief_pool = merged[(merged["brief_candidate_score"] >= 70) & (merged["review_status"].isin(["reviewed", "briefed"]))]
+        if brief_pool.empty:
+            st.info("暂无周报候选 | No brief candidates yet.")
+        else:
+            display_df(
+                brief_pool[
+                    [
+                        "signal_id",
+                        "signal",
+                        "classification",
+                        "risk_level",
+                        "brief_candidate_score",
+                        "quality_reason_cn",
+                        "recommended_action",
+                        "source_link",
+                    ]
+                ]
+            )
+    with cockpit_tab2:
+        questions = dataframe(
+            conn,
+            """
+            SELECT id, area, question, status, current_hypothesis, evidence, updated_at
+            FROM market_questions
+            ORDER BY status, updated_at DESC
+            """,
+        )
+        display_df(questions)
+    with cockpit_tab3:
+        template_rows = [
+            {"classification": key, "recommended_action": value}
+            for key, value in ACTION_TEMPLATES.items()
+        ]
+        display_df(pd.DataFrame(template_rows))
+
+
 def render_review_queue(conn: sqlite3.Connection) -> None:
     section_header(
         "人工复核队列",
@@ -1338,8 +1580,8 @@ def render_guardrails() -> None:
 
 
 def render_overview(conn: sqlite3.Connection) -> None:
-    st.title("赞比亚数字借贷个人研究雷达 | Zambia Digital Lending Personal Research Radar")
-    st.caption("公开来源市场研究工作台 | Public-source research workspace for market understanding and capability-building.")
+    st.title(f"赞比亚数字借贷个人研究雷达 {APP_VERSION} | Zambia Digital Lending Personal Research Radar")
+    st.caption(f"{APP_VERSION_LABEL} · 公开来源市场研究工作台 | Public-source research workspace for market understanding and capability-building.")
     st.markdown(
         """
         <div class="section-note">
@@ -1368,6 +1610,7 @@ def main() -> None:
             "业务解读 Intelligence",
             "竞品 Watch",
             "竞品矩阵 Matrix",
+            "复核驾驶舱 Cockpit",
             "复核 Queue",
             "笔记 Notes",
             "问题 Questions",
@@ -1390,18 +1633,20 @@ def main() -> None:
     with tabs[5]:
         render_competitor_matrix(conn)
     with tabs[6]:
-        render_review_queue(conn)
+        render_review_cockpit(conn)
     with tabs[7]:
-        render_research_notes(conn)
+        render_review_queue(conn)
     with tabs[8]:
-        render_market_questions(conn)
+        render_research_notes(conn)
     with tabs[9]:
-        render_payment_rails(conn)
+        render_market_questions(conn)
     with tabs[10]:
-        render_brief_draft(conn)
+        render_payment_rails(conn)
     with tabs[11]:
-        render_capability_tracker(conn)
+        render_brief_draft(conn)
     with tabs[12]:
+        render_capability_tracker(conn)
+    with tabs[13]:
         render_guardrails()
 
 

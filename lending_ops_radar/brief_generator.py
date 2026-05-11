@@ -22,6 +22,7 @@ from lending_ops_radar.intelligence import (
     top_interpretive_findings,
 )
 from lending_ops_radar.quality import build_quality_rows, quality_markdown_table, summary_counts
+from lending_ops_radar.version import APP_VERSION_LABEL
 
 DEFAULT_DB = ROOT / "data" / "lending_ops_radar.sqlite3"
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "briefs"
@@ -411,6 +412,8 @@ def render_brief(
     source_health = source_health or []
 
     return f"""# 数字借贷个人研究笔记 | Digital Lending Personal Research Notes - {week_label}
+
+Platform version: {APP_VERSION_LABEL}
 
 中文：这是一份个人公开来源研究笔记，用于市场理解和能力建设。它不是法律意见、监管结论、客户交付物或商业材料。
 

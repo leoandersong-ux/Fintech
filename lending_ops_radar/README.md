@@ -60,6 +60,17 @@ Generate a quality snapshot:
 & '.\.venv-lending\Scripts\python.exe' .\lending_ops_radar\quality.py
 ```
 
+## Review Workflow Layer
+
+`v0.4` adds the Streamlit tab `复核驾驶舱 Cockpit`.
+
+Use it to:
+
+- See the highest-priority signals first.
+- Apply classification-specific review templates.
+- Mark signals as reviewed, brief candidates, source-review items, background, or rejected.
+- Keep weekly notes focused on high-quality, source-linked signals.
+
 ## Guardrails
 
 - Public pages only.

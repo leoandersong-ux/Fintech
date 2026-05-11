@@ -1,5 +1,7 @@
 # 数字借贷个人研究笔记 | Digital Lending Personal Research Notes - 2026-W20
 
+Platform version: v0.4 Review Workflow Layer
+
 中文：这是一份个人公开来源研究笔记，用于市场理解和能力建设。它不是法律意见、监管结论、客户交付物或商业材料。
 
 English: Prepared as a personal public-source research note for market understanding and capability-building. This is not legal advice, regulatory determination, customer delivery, or commercial material.

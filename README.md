@@ -33,7 +33,8 @@ If the app was created with Python 3.14 and fails while building `pyarrow`, dele
 
 ## Current Node
 
-- Version notes: [v0.3 Intelligence Quality Layer](./VERSION_NOTES_2026-05-11_v0.3.md)
+- Version notes: [v0.4 Review Workflow Layer](./VERSION_NOTES_2026-05-11_v0.4.md)
+- Previous node: [v0.3 Intelligence Quality Layer](./VERSION_NOTES_2026-05-11_v0.3.md)
 - Weekly operating rhythm: [Weekly Research Workflow](./WEEKLY_RESEARCH_WORKFLOW.md)
 
 ## Included Data
