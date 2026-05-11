@@ -31,6 +31,7 @@ from lending_ops_radar.intelligence import (
 )
 from lending_ops_radar.competitor_matrix import build_product_matrix, render_matrix_markdown
 from lending_ops_radar.pipeline import DEFAULT_SOURCES, connect, init_db, load_sources, upsert_sources
+from lending_ops_radar.quality import build_quality_rows, summary_counts
 
 
 st.set_page_config(page_title="个人研究雷达 | Lending Radar", layout="wide")
@@ -207,6 +208,25 @@ COLUMN_LABELS = {
     "gap_flags_en": "Evidence Gaps | EN",
     "matrix_priority_cn": "矩阵优先级 | Priority",
     "matrix_priority_en": "Matrix Priority | EN",
+    "competitor_positioning_cn": "竞品定位 | Positioning",
+    "competitor_positioning_en": "Competitor Positioning | EN",
+    "operating_risk_focus_cn": "运营风险焦点 | Ops Focus",
+    "operating_risk_focus_en": "Operating Risk Focus | EN",
+    "source_credibility_score": "来源可信度 | Source Score",
+    "lending_relevance_score": "业务相关度 | Relevance",
+    "manual_review_need_score": "回源需求 | Review Need",
+    "brief_candidate_score": "周报候选分 | Brief Score",
+    "quality_tier_cn": "质量层级 | Quality Tier",
+    "quality_tier_en": "Quality Tier | EN",
+    "recommended_use_cn": "建议用途 | Recommended Use",
+    "recommended_use_en": "Recommended Use | EN",
+    "quality_reason_cn": "评分原因 | Quality Reason",
+    "quality_reason_en": "Quality Reason | EN",
+    "check_cn": "检查项 | Check",
+    "check_en": "Check | EN",
+    "check_status": "状态 | Status",
+    "detail_cn": "说明 | Detail",
+    "detail_en": "Detail | EN",
     "rows": "行数 | Rows",
 }
 
@@ -418,6 +438,81 @@ def seed_market_questions(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def deployment_checks(conn: sqlite3.Connection) -> list[dict[str, object]]:
+    brief_dir = ROOT / "data" / "briefs"
+    db_path = DEFAULT_DB
+    latest_brief = max(brief_dir.glob("zambia_digital_lending_personal_notes_*.md"), key=lambda path: path.stat().st_mtime, default=None)
+    checks = [
+        {
+            "check_cn": "Streamlit 入口",
+            "check_en": "Streamlit entrypoint",
+            "check_status": "pass" if (ROOT / "streamlit_app.py").exists() else "missing",
+            "detail_cn": "streamlit_app.py 存在，可作为 Cloud main file。",
+            "detail_en": "streamlit_app.py exists and can be used as the Cloud main file.",
+        },
+        {
+            "check_cn": "云端依赖",
+            "check_en": "Cloud requirements",
+            "check_status": "pass" if (ROOT / "requirements.txt").exists() else "missing",
+            "detail_cn": "requirements.txt 保持精简，避免云端重编译 pyarrow。",
+            "detail_en": "requirements.txt is intentionally minimal to avoid rebuilding pyarrow.",
+        },
+        {
+            "check_cn": "研究数据库",
+            "check_en": "Research database",
+            "check_status": "pass" if db_path.exists() else "missing",
+            "detail_cn": f"SQLite: {db_path.name}, {round(db_path.stat().st_size / 1024 / 1024, 2) if db_path.exists() else 0} MB。",
+            "detail_en": "SQLite research database is available for the dashboard.",
+        },
+        {
+            "check_cn": "已复核信号",
+            "check_en": "Reviewed signals",
+            "check_status": "pass" if count_rows(conn, "SELECT COUNT(*) FROM reviews WHERE review_status = 'reviewed'") > 0 else "empty",
+            "detail_cn": "有 reviewed 信号，可生成业务解读和周报。",
+            "detail_en": "Reviewed signals exist for intelligence and weekly notes.",
+        },
+        {
+            "check_cn": "最近周报",
+            "check_en": "Latest weekly note",
+            "check_status": "pass" if latest_brief else "missing",
+            "detail_cn": latest_brief.name if latest_brief else "尚未找到个人周报 Markdown。",
+            "detail_en": "Latest generated personal notes file.",
+        },
+    ]
+    return checks
+
+
+def render_deployment_health(conn: sqlite3.Connection) -> None:
+    section_header(
+        "部署健康",
+        "Deploy Health",
+        "确认 Streamlit Cloud 部署、数据库、周报和同步边界是否处于可用状态。",
+        "Check whether Streamlit deployment, database, weekly notes, and sync boundaries are usable.",
+    )
+    db_size = round(DEFAULT_DB.stat().st_size / 1024 / 1024, 2) if DEFAULT_DB.exists() else 0
+    latest_source = conn.execute("SELECT MAX(updated_at) FROM source_quality").fetchone()[0]
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("数据库 | DB", f"{db_size} MB")
+    col2.metric("信号 | Signals", count_rows(conn, "SELECT COUNT(*) FROM signals"))
+    col3.metric("已复核 | Reviewed", count_rows(conn, "SELECT COUNT(*) FROM reviews WHERE review_status = 'reviewed'"))
+    col4.metric("最近来源运行 | Last Source Run", latest_source or "N/A")
+
+    st.markdown("#### 部署检查 | Deployment Checks")
+    display_df(pd.DataFrame(deployment_checks(conn)))
+
+    st.markdown("#### 节点同步边界 | Milestone Sync Boundary")
+    st.markdown(
+        """
+        <div class="section-note">
+        中文：节点同步只包含 fintech 研究平台文件、SQLite reviewed data、生成的 briefs 和部署文件；不包含无关商机项目资产、PDF/DOCX 渲染物、私人借款人数据或任何 secret。
+        <br>
+        <span class="quiet">English: Milestone sync includes only fintech research platform files, reviewed SQLite data, generated briefs, and deploy files. It excludes unrelated opportunity-radar assets, PDF/DOCX render artifacts, private borrower data, and secrets.</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_sources(conn: sqlite3.Connection) -> None:
     section_header(
         "数据源",
@@ -476,7 +571,8 @@ def render_new_signals(conn: sqlite3.Connection) -> None:
         """
         SELECT
             s.id, s.source_name, s.item_title, s.classification, s.risk_level,
-            s.item_url, s.last_seen_at, r.review_status
+            s.source_id, s.source_url, s.item_url, s.raw_text, s.last_seen_at,
+            r.review_status, r.priority, r.reviewer_notes, r.recommended_action
         FROM signals s
         JOIN reviews r ON r.signal_id = s.id
         WHERE r.review_status = 'new'
@@ -486,7 +582,24 @@ def render_new_signals(conn: sqlite3.Connection) -> None:
     if new_df.empty:
         st.success("当前没有待审信号 | No new signals in the review queue.")
     else:
-        display_df(new_df)
+        quality_df = pd.DataFrame(build_quality_rows(new_df.to_dict("records")))
+        display_df(
+            quality_df[
+                [
+                    "signal_id",
+                    "signal",
+                    "classification",
+                    "risk_level",
+                    "brief_candidate_score",
+                    "manual_review_need_score",
+                    "quality_tier_cn",
+                    "recommended_use_cn",
+                    "source_link",
+                ]
+            ]
+        )
+        with st.expander("查看原始新信号 | Raw new signals"):
+            display_df(new_df.drop(columns=["raw_text"], errors="ignore"))
 
 
 def render_business_intelligence(conn: sqlite3.Connection) -> None:
@@ -498,6 +611,7 @@ def render_business_intelligence(conn: sqlite3.Connection) -> None:
     )
     rows = load_reviewed_signals(conn)
     assessments = build_assessments(rows)
+    quality_rows = build_quality_rows(rows)
     findings = top_interpretive_findings(assessments)
     gaps = coverage_gaps(assessments)
 
@@ -509,6 +623,35 @@ def render_business_intelligence(conn: sqlite3.Connection) -> None:
     col2.metric("高潜在影响 | High Potential", high_count)
     col3.metric("中潜在影响 | Medium Potential", medium_count)
     col4.metric("影响域 | Domains", len(domains))
+
+    st.markdown("#### 本周最值得看 | Priority Reads")
+    quality_df = pd.DataFrame(quality_rows)
+    if quality_df.empty:
+        st.info("还没有质量评分 | No quality scores yet.")
+    else:
+        q_col1, q_col2, q_col3 = st.columns(3)
+        counts = summary_counts(quality_rows)
+        q_col1.metric("优先阅读 | Priority", counts["tier"].get("优先阅读", 0))
+        q_col2.metric("周报候选 | Brief Candidates", counts["tier"].get("周报候选", 0))
+        q_col3.metric("平均候选分 | Avg Score", f"{round(quality_df['brief_candidate_score'].mean())}/100")
+        display_df(
+            quality_df.head(5)[
+                [
+                    "signal_id",
+                    "signal",
+                    "classification",
+                    "risk_level",
+                    "brief_candidate_score",
+                    "source_credibility_score",
+                    "lending_relevance_score",
+                    "manual_review_need_score",
+                    "quality_tier_cn",
+                    "recommended_use_cn",
+                    "quality_reason_cn",
+                    "source_link",
+                ]
+            ]
+        )
 
     st.markdown("#### 关键判断 | Key Interpretive Findings")
     for item in findings:
@@ -641,8 +784,8 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
     section_header(
         "竞品产品矩阵",
         "Competitor Product Matrix",
-        "把已复核的竞品信号整理成可比较的产品层、额度档、速度承诺、支付成熟度、客服/隐私成熟度和信息缺口。",
-        "A comparable view of reviewed competitor signals: product layer, limit tier, speed promise, payment maturity, support/privacy maturity, and evidence gaps.",
+        "把已复核的竞品信号整理成可比较的定位、产品层、额度档、速度承诺、支付成熟度、客服/隐私成熟度和信息缺口。",
+        "A comparable view of reviewed competitor signals: positioning, product layer, limit tier, speed promise, payment maturity, support/privacy maturity, and evidence gaps.",
     )
     rows = build_product_matrix(conn)
     matrix_df = pd.DataFrame(rows)
@@ -738,10 +881,22 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
             .sort_values("rows", ascending=False)
         )
 
+    st.markdown("#### 竞品定位 2.0 | Competitor Positioning 2.0")
+    display_df(
+        filtered.groupby("competitor_positioning_cn", dropna=False)
+        .agg(
+            rows=("product_or_signal", "count"),
+            avg_completeness=("data_completeness_score", "mean"),
+        )
+        .reset_index()
+        .sort_values("rows", ascending=False)
+    )
+
     st.markdown(f"#### 产品矩阵 | Product Matrix ({len(filtered)} rows)")
     display_cols = [
         "institution",
         "product_or_signal",
+        "competitor_positioning_cn",
         "product_layer_cn",
         "limit_tier_cn",
         "segment_cn",
@@ -753,6 +908,7 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
         "support_privacy_maturity_cn",
         "data_completeness_score",
         "matrix_priority_cn",
+        "operating_risk_focus_cn",
         "gap_flags_cn",
         "business_interpretation_cn",
         "next_questions_cn",
@@ -777,6 +933,8 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
             "support_privacy_ops",
             "business_interpretation_en",
             "next_questions_en",
+            "competitor_positioning_en",
+            "operating_risk_focus_en",
             "source_links",
         ]
         display_df(filtered[detail_cols])
@@ -1204,6 +1362,7 @@ def main() -> None:
     render_overview(conn)
     tabs = st.tabs(
         [
+            "健康 Health",
             "数据源 Sources",
             "新信号 New",
             "业务解读 Intelligence",
@@ -1219,28 +1378,30 @@ def main() -> None:
         ]
     )
     with tabs[0]:
-        render_sources(conn)
+        render_deployment_health(conn)
     with tabs[1]:
-        render_new_signals(conn)
+        render_sources(conn)
     with tabs[2]:
-        render_business_intelligence(conn)
+        render_new_signals(conn)
     with tabs[3]:
-        render_competitor_watch(conn)
+        render_business_intelligence(conn)
     with tabs[4]:
-        render_competitor_matrix(conn)
+        render_competitor_watch(conn)
     with tabs[5]:
-        render_review_queue(conn)
+        render_competitor_matrix(conn)
     with tabs[6]:
-        render_research_notes(conn)
+        render_review_queue(conn)
     with tabs[7]:
-        render_market_questions(conn)
+        render_research_notes(conn)
     with tabs[8]:
-        render_payment_rails(conn)
+        render_market_questions(conn)
     with tabs[9]:
-        render_brief_draft(conn)
+        render_payment_rails(conn)
     with tabs[10]:
-        render_capability_tracker(conn)
+        render_brief_draft(conn)
     with tabs[11]:
+        render_capability_tracker(conn)
+    with tabs[12]:
         render_guardrails()
 
 

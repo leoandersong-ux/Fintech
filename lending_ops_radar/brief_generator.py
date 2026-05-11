@@ -21,6 +21,7 @@ from lending_ops_radar.intelligence import (
     coverage_gaps,
     top_interpretive_findings,
 )
+from lending_ops_radar.quality import build_quality_rows, quality_markdown_table, summary_counts
 
 DEFAULT_DB = ROOT / "data" / "lending_ops_radar.sqlite3"
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "briefs"
@@ -230,7 +231,25 @@ def findings_table(rows: Iterable[dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def impact_matrix_cards(assessments: list[dict[str, str | int]], limit: int = 10) -> str:
+def quality_summary_section(rows: list[dict[str, object]]) -> str:
+    if not rows:
+        return "_暂无质量评分 | No quality scores yet._"
+    counts = summary_counts(rows)
+    avg_score = round(sum(int(row["brief_candidate_score"]) for row in rows) / len(rows))
+    tier_lines = "\n".join(f"- {tier}: {count}" for tier, count in counts["tier"].most_common())
+    return f"""- 平均候选分 | Average candidate score: {avg_score}/100
+- 优先阅读 | Priority reads: {counts["tier"].get("优先阅读", 0)}
+- 周报候选 | Brief candidates: {counts["tier"].get("周报候选", 0)}
+
+{tier_lines}
+
+### 2.1 本周最值得看 | Priority Reads
+
+{quality_markdown_table(rows, limit=5)}
+"""
+
+
+def impact_matrix_cards(assessments: list[dict[str, str | int]], limit: int = 10, section_number: int = 4) -> str:
     rows = assessment_table_rows(assessments, limit=limit)
     if not rows:
         return "_暂无已复核信号可解读 | No reviewed signals available for interpretation._"
@@ -239,7 +258,7 @@ def impact_matrix_cards(assessments: list[dict[str, str | int]], limit: int = 10
         domain = f"{row['domain_cn']} / {row['domain_en']}"
         lines.extend(
             [
-                f"### 3.{index} {readable_text(domain)}",
+                f"### {section_number}.{index} {readable_text(domain)}",
                 "",
                 f"**等级 | Level:** {readable_text(row['impact_level'])}",
                 "",
@@ -381,6 +400,7 @@ def render_brief(
     top_risks = sorted(rows, key=lambda row: (row["priority"], row["risk_level"] != "high"))[:5]
     recommended = [row for row in rows if row["recommended_action"]][:5]
     assessments = build_assessments(rows)
+    quality_rows = build_quality_rows(rows)
     high_impact_count = sum(1 for item in assessments if item["impact_level"] == "high")
     medium_impact_count = sum(1 for item in assessments if item["impact_level"] == "medium")
     interpreted_domains = len({str(item["domain_key"]) for item in assessments})
@@ -406,39 +426,43 @@ This weekly note contains {len(rows)} reviewed public-source signal(s) and {len(
 
 Use this only as a private research artifact. Separate source facts from personal interpretation.
 
-## 2. 本周业务判断 | Business Interpretation
+## 2. 信息质量与阅读优先级 | Signal Quality and Reading Priority
+
+{quality_summary_section(quality_rows)}
+
+## 3. 本周业务判断 | Business Interpretation
 
 {findings_table(findings)}
 
-## 3. 小微贷款业务影响矩阵 | Micro-lending Impact Matrix
+## 4. 小微贷款业务影响矩阵 | Micro-lending Impact Matrix
 
-{impact_matrix_cards(assessments)}
+{impact_matrix_cards(assessments, section_number=4)}
 
-## 4. 情报覆盖缺口 | Intelligence Coverage Gaps
+## 5. 情报覆盖缺口 | Intelligence Coverage Gaps
 
 {coverage_gap_table(gaps)}
 
-## 5. 监管观察 | Regulatory Watch
+## 6. 监管观察 | Regulatory Watch
 
 {table_for(grouped.get("Regulatory Watch", []))}
 
-## 6. 支付轨道与借贷运营 | Payment Rails / Lending Ops
+## 7. 支付轨道与借贷运营 | Payment Rails / Lending Ops
 
 {table_for(grouped.get("Payment Rails / Lending Ops", []))}
 
-## 7. 竞品变化 | Competitor Changes
+## 8. 竞品变化 | Competitor Changes
 
 {table_for(grouped.get("Competitor Changes", []))}
 
-## 8. App 评价与投诉主题 | App Review & Complaint Themes
+## 9. App 评价与投诉主题 | App Review & Complaint Themes
 
 {table_for(grouped.get("App Review & Complaint Themes", []))}
 
-## 9. 声誉与新闻信号 | Reputation / News Signals
+## 10. 声誉与新闻信号 | Reputation / News Signals
 
 {table_for(grouped.get("Reputation / News Signals", []))}
 
-## 10. 运营模式笔记 | Operating Pattern Notes
+## 11. 运营模式笔记 | Operating Pattern Notes
 
 - 观察公开投诉语言如何映射到真实运营域：客服、放款、还款、催收、欺诈、隐私和披露。
 - Watch how public complaint language maps to real operating domains: support, disbursement, repayment, collections, fraud, privacy, and disclosure.
@@ -449,37 +473,37 @@ Use this only as a private research artifact. Separate source facts from persona
 - 对支付轨道信号，要区分基础设施/合作伙伴依赖与直接面向借款人的产品规则。
 - For payment rails, separate infrastructure/partner-dependency signals from direct borrower-facing product rules.
 
-## 11. 个人研究笔记 | Personal Research Notes
+## 12. 个人研究笔记 | Personal Research Notes
 
 {notes_table(notes)}
 
-## 12. 市场问题 | Market Questions
+## 13. 市场问题 | Market Questions
 
 {questions_table(questions)}
 
-## 13. 来源健康度 | Source Health
+## 14. 来源健康度 | Source Health
 
 {source_health_table(source_health)}
 
-## 14. 催收与行为观察 | Collections / Conduct Watch
+## 15. 催收与行为观察 | Collections / Conduct Watch
 
 {table_for(grouped.get("Collections Communication Insights", []))}
 
-## 15. 重点风险 Top 5 | Top 5 Risks To Watch
+## 16. 重点风险 Top 5 | Top 5 Risks To Watch
 
 {table_for(top_risks)}
 
-## 16. 下一步学习动作 | Next Learning Actions
+## 17. 下一步学习动作 | Next Learning Actions
 
 {table_for(recommended)}
 
-## 17. 来源 | Sources
+## 18. 来源 | Sources
 
 本笔记中的主要来源均已在上方表格中链接。只应使用公开网页、公开 app listing、官方公告、公开新闻，以及你手动批准的公开 watchlist。
 
 Primary sources in this note are source-linked in the tables above. Only public webpages, public app listings, official announcements, public news, and your own manually approved public watchlists should be used.
 
-## 18. 能力建设检查清单 | Capability-Building Checklist
+## 19. 能力建设检查清单 | Capability-Building Checklist
 
 - 本周是否至少运行过一个 Scrapling 公开来源抓取？
 - Did I run at least one Scrapling public-source fetch?

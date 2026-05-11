@@ -38,9 +38,11 @@ Before syncing:
 - `lending_ops_radar/`
 - `data/lending_ops_radar.sqlite3`
 - `data/lending_ops_competitor_product_matrix.csv`
+- `data/lending_ops_signal_quality.csv`
 - `data/lending_ops_signals_export.csv`
 - selected reviewed/generated files under `data/briefs/`
 - fintech/digital-lending research handoff and operating notes
+- milestone notes such as `VERSION_NOTES_*.md` and `WEEKLY_RESEARCH_WORKFLOW.md`
 
 ## Never Sync
 

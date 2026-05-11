@@ -602,6 +602,56 @@ def matrix_priority(row: dict[str, object]) -> tuple[str, str]:
     return "中：可纳入常规监控", "Medium: keep in regular monitoring"
 
 
+def competitor_positioning(row: dict[str, object]) -> tuple[str, str]:
+    layer = normalize_text(row.get("product_layer_en")).lower()
+    payment = normalize_text(row.get("payment_maturity_en")).lower()
+    speed = normalize_text(row.get("speed_tier_en")).lower()
+    limit_tier = normalize_text(row.get("limit_tier_en")).lower()
+    if "short-term microcredit" in layer and ("instant" in speed or "mobile-money" in payment):
+        return "App-first 小额现金贷", "App-first microcash lender"
+    if "salary" in layer:
+        return "收入/工资锚定短贷", "Income or salary-linked short credit"
+    if "larger personal" in layer:
+        return "大额个人信贷", "Larger-ticket personal credit"
+    if "sme operating" in layer and "business-scale" in limit_tier:
+        return "企业级 SME 融资", "Business-scale SME finance"
+    if "sme operating" in layer:
+        return "经营现金流融资", "Operating cash-flow finance"
+    if "agriculture" in layer:
+        return "农业周期金融", "Agriculture-cycle finance"
+    if "payment" in layer:
+        return "支付/钱包生态能力", "Payment or wallet ecosystem capability"
+    if "privacy" in layer:
+        return "App 信任与账户控制能力", "App trust and account-control capability"
+    if "collateral" in layer:
+        return "抵押/担保型更大额信贷", "Collateral-backed larger credit"
+    return "细分客群/场景贷款", "Segment or use-case lending"
+
+
+def operating_risk_focus(row: dict[str, object]) -> tuple[str, str]:
+    gaps = normalize_text(row.get("gap_flags_en")).lower()
+    payment = normalize_text(row.get("payment_maturity_en")).lower()
+    support = normalize_text(row.get("support_privacy_maturity_en")).lower()
+    focus_cn: list[str] = []
+    focus_en: list[str] = []
+    if "rate or fees" in gaps or "fees" in gaps:
+        focus_cn.append("费用/总成本披露")
+        focus_en.append("fee and total-cost disclosure")
+    if "payment" in payment or "rail" in payment or "payout" in gaps:
+        focus_cn.append("放款/还款支付轨道")
+        focus_en.append("payout and repayment rails")
+    if "support" in gaps or "support" in support or "privacy" in support:
+        focus_cn.append("客服/投诉/隐私入口")
+        focus_en.append("support, dispute, and privacy routes")
+    if "tenor" in gaps or "repayment" in gaps:
+        focus_cn.append("期限/还款节奏")
+        focus_en.append("tenor and repayment rhythm")
+    if not focus_cn:
+        focus_cn.append("持续常规监控")
+        focus_en.append("regular monitoring")
+    return "；".join(focus_cn), "; ".join(focus_en)
+
+
 def enrich_matrix_row(row: dict[str, object]) -> dict[str, object]:
     product_layer_cn, product_layer_en = classify_product_layer(row)
     limit_value_zmw, limit_tier_cn, limit_tier_en = classify_limit_tier(row.get("limit_amount"))
@@ -630,6 +680,12 @@ def enrich_matrix_row(row: dict[str, object]) -> dict[str, object]:
     matrix_priority_cn, matrix_priority_en = matrix_priority(row)
     row["matrix_priority_cn"] = matrix_priority_cn
     row["matrix_priority_en"] = matrix_priority_en
+    positioning_cn, positioning_en = competitor_positioning(row)
+    row["competitor_positioning_cn"] = positioning_cn
+    row["competitor_positioning_en"] = positioning_en
+    risk_focus_cn, risk_focus_en = operating_risk_focus(row)
+    row["operating_risk_focus_cn"] = risk_focus_cn
+    row["operating_risk_focus_en"] = risk_focus_en
     return row
 
 
@@ -707,8 +763,8 @@ def matrix_markdown_table(rows: Iterable[dict[str, object]], limit: int | None =
     if not selected:
         return "_暂无竞品产品矩阵 | No competitor product matrix rows yet._"
     lines = [
-        "| 机构 Institution | 产品/信号 Product/Signal | 产品层 Product Layer | 额度档 Limit Tier | 完整度 Score | 关键缺口 Key Gaps | 业务解读 Interpretation | 来源 Sources |",
-        "| --- | --- | --- | --- | ---: | --- | --- | --- |",
+        "| 机构 Institution | 产品/信号 Product/Signal | 定位 Positioning | 产品层 Product Layer | 额度档 Limit Tier | 完整度 Score | 运营风险焦点 Ops Focus | 关键缺口 Key Gaps | 来源 Sources |",
+        "| --- | --- | --- | --- | --- | ---: | --- | --- | --- |",
     ]
     for row in selected:
         lines.append(
@@ -717,11 +773,12 @@ def matrix_markdown_table(rows: Iterable[dict[str, object]], limit: int | None =
                 [
                     escape_cell(row["institution"]),
                     escape_cell(row["product_or_signal"]),
+                    escape_cell(f"{row['competitor_positioning_cn']} / {row['competitor_positioning_en']}"),
                     escape_cell(f"{row['product_layer_cn']} / {row['product_layer_en']}"),
                     escape_cell(f"{row['limit_amount']} - {row['limit_tier_cn']}"),
                     escape_cell(row["data_completeness_score"]),
+                    escape_cell(row["operating_risk_focus_cn"]),
                     escape_cell(row["gap_flags_cn"]),
-                    escape_cell(row["business_interpretation_cn"]),
                     row["source_links"],
                 ]
             )
@@ -778,7 +835,11 @@ English: This is a personal research matrix based on reviewed public-source sign
 
 {top_gap_table(rows)}
 
-## 3. 产品矩阵 | Product Matrix
+### 2.6 竞品定位 | Competitor Positioning
+
+{count_markdown_table(rows, "competitor_positioning_cn", "竞品定位", "Competitor Positioning")}
+
+## 3. 产品矩阵 2.0 | Product Matrix 2.0
 
 {matrix_markdown_table(rows)}
 

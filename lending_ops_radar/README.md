@@ -23,6 +23,7 @@ The Streamlit dashboard and generated weekly notes are intentionally bilingual:
 - Normalizes source items into `signals`.
 - Classifies each signal into lending-ops categories such as `complaint`, `fraud`, `privacy`, `regulatory`, and `competitor_change`.
 - Adds rule-based business interpretation for reviewed signals: impact domain, lending impact, affected process, recommended action, and follow-up questions.
+- Scores reviewed signals for source credibility, lending relevance, manual review need, and weekly-brief priority.
 - Filters obvious boilerplate such as copyright footers before new inserts.
 - Stores data in SQLite for review.
 - Records source runs, personal research notes, and learning goals.
@@ -43,6 +44,21 @@ It converts reviewed public signals into:
 This layer is intentionally rule-based first. It helps you learn the market and lending-ops risk surface without pretending to be an autonomous compliance engine.
 
 Coverage roadmap: [INTELLIGENCE_COVERAGE_PLAN.md](./INTELLIGENCE_COVERAGE_PLAN.md)
+
+## Signal Quality Layer
+
+`quality.py` is the v0.3 judgment layer. It helps decide what deserves attention first:
+
+- `source_credibility_score`: whether the signal comes from an official, competitor, app-listing, or weaker public source.
+- `lending_relevance_score`: how directly the signal affects lending operations.
+- `manual_review_need_score`: whether it should be checked manually before entering weekly notes.
+- `brief_candidate_score`: whether it belongs in the weekly research note.
+
+Generate a quality snapshot:
+
+```powershell
+& '.\.venv-lending\Scripts\python.exe' .\lending_ops_radar\quality.py
+```
 
 ## Guardrails
 
