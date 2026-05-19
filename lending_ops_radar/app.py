@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import sqlite3
 import sys
@@ -34,6 +35,7 @@ from lending_ops_radar.intelligence import (
 from lending_ops_radar.competitor_matrix import build_product_matrix, render_matrix_markdown
 from lending_ops_radar.pipeline import DEFAULT_SOURCES, connect, init_db, load_sources, upsert_sources
 from lending_ops_radar.quality import build_quality_rows, summary_counts
+from lending_ops_radar.reading_brief import build_reading_brief
 from lending_ops_radar.snapshot_exporter import DEFAULT_OUTPUT as DEFAULT_SNAPSHOT
 from lending_ops_radar.trends import market_voice_rows, source_trend_rows, trend_rows, weekly_action_rows
 from lending_ops_radar.version import APP_VERSION, APP_VERSION_LABEL
@@ -99,6 +101,63 @@ APP_CSS = """
         border-radius: 8px;
         padding: 0.85rem 1rem;
         margin: 0.45rem 0;
+    }
+    .brief-panel {
+        background: #fbfcf9;
+        border: 1px solid #dfe7dc;
+        border-radius: 8px;
+        padding: 1rem 1.05rem;
+        margin: 0.35rem 0 0.9rem 0;
+    }
+    .brief-panel h3 {
+        font-size: 1.08rem;
+        margin: 0 0 0.55rem 0;
+    }
+    .brief-card {
+        background: #ffffff;
+        border: 1px solid #d8e0db;
+        border-radius: 8px;
+        padding: 0.92rem 1rem;
+        min-height: 168px;
+        margin-bottom: 0.75rem;
+    }
+    .brief-card strong {
+        color: #153a32;
+    }
+    .brief-index {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.55rem;
+        height: 1.55rem;
+        border-radius: 999px;
+        background: #eaf2ed;
+        color: #153a32;
+        font-weight: 700;
+        margin-right: 0.35rem;
+    }
+    .brief-meta {
+        color: #64736c;
+        font-size: 0.86rem;
+        margin-top: 0.45rem;
+    }
+    .brief-action {
+        background: #fff8ea;
+        border: 1px solid #ead8a8;
+        border-radius: 8px;
+        padding: 0.72rem 0.85rem;
+        margin-bottom: 0.65rem;
+    }
+    .brief-gap {
+        border-left: 4px solid #b5653f;
+        background: #fffaf6;
+        border-radius: 0 8px 8px 0;
+        padding: 0.68rem 0.85rem;
+        margin-bottom: 0.55rem;
+    }
+    .compact-divider {
+        border-top: 1px solid #e1e7e3;
+        margin: 0.9rem 0;
     }
     .language-banner {
         background: #153a32;
@@ -536,6 +595,10 @@ def localized_value(row: dict[str, object] | pd.Series, base: str) -> str:
     return readable_text(value)
 
 
+def safe_html(value: object) -> str:
+    return html.escape(readable_text(value), quote=True)
+
+
 def count_rows(conn: sqlite3.Connection, query: str, params: tuple = ()) -> int:
     return int(conn.execute(query, params).fetchone()[0])
 
@@ -904,7 +967,7 @@ def render_business_intelligence(conn: sqlite3.Connection) -> None:
     col3.metric(title_pair("中潜在影响", "Medium Potential Impact"), medium_count)
     col4.metric(title_pair("影响域", "Impact Domains"), len(domains))
 
-    st.markdown(f"#### {title_pair('V0.6 五条迭代线行动板', 'V0.6 Five-Lane Action Board')}")
+    st.markdown(f"#### {title_pair('V0.7 五条迭代线行动板', 'V0.7 Five-Lane Action Board')}")
     lane_df = pd.DataFrame(lane_rows)
     if lane_df.empty:
         st.info(ui_text("暂无可用于行动板的解读信号。", "No interpreted signals available for the action board yet."))
@@ -1992,6 +2055,112 @@ def render_overview(conn: sqlite3.Connection) -> None:
     col4.metric(title_pair("市场问题", "Questions"), count_rows(conn, "SELECT COUNT(*) FROM market_questions"))
 
 
+def render_research_brief_home(conn: sqlite3.Connection) -> None:
+    snapshot = load_dashboard_snapshot()
+    if not snapshot:
+        st.warning(ui_text("尚未生成仪表盘快照。请先运行 snapshot_exporter.py。", "No dashboard snapshot found. Run snapshot_exporter.py first."))
+        render_deployment_health(conn)
+        return
+
+    brief = build_reading_brief(snapshot, language=current_language())
+    counts = brief["counts"]
+    generated_at = brief.get("generated_at") or "N/A"
+
+    section_header(
+        "研究简报",
+        "Research Brief",
+        "按“结论、影响、行动、缺口”的顺序阅读，减少在表格之间来回跳转。",
+        "Read by conclusion, impact, action, and gap instead of jumping across tables.",
+    )
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric(title_pair("公开信号", "Public Signals"), counts["signals"])
+    col2.metric(title_pair("已复核", "Reviewed"), counts["reviewed"])
+    col3.metric(title_pair("待复核", "New"), counts["new"])
+    col4.metric(title_pair("竞品矩阵", "Competitor Matrix"), counts["competitor_matrix_rows"])
+    st.caption(f"{title_pair('快照生成', 'Snapshot Generated')}: {generated_at}")
+
+    st.markdown(f"#### {title_pair('先读这几条', 'Read These First')}")
+    top_rows = brief["topline"]
+    if not top_rows:
+        st.info(ui_text("暂无可读的顶部信号。", "No readable top signals yet."))
+    else:
+        columns = st.columns(2)
+        for index, item in enumerate(top_rows, start=1):
+            with columns[(index - 1) % 2]:
+                link = item.get("source_link") or ""
+                source_line = (
+                    f'<a href="{safe_html(link)}" target="_blank">{title_pair("来源", "Source")}</a>'
+                    if link
+                    else safe_html(item.get("source", ""))
+                )
+                st.markdown(
+                    f"""
+                    <div class="brief-card">
+                        <div><span class="brief-index">{index}</span><strong>{safe_html(item.get("title", ""))}</strong></div>
+                        <div class="brief-meta">{safe_html(item.get("classification", ""))} · {safe_html(item.get("risk", ""))} · {safe_html(item.get("source", ""))}</div>
+                        <div class="compact-divider"></div>
+                        <strong>{title_pair("为什么重要", "Why It Matters")}</strong><br>
+                        {safe_html(item.get("why", ""))}<br><br>
+                        <strong>{title_pair("下一步", "Next")}</strong><br>
+                        {safe_html(item.get("recommended_use", ""))}
+                        <div class="brief-meta">{source_line}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+    left, right = st.columns([0.58, 0.42])
+    with left:
+        st.markdown(f"#### {title_pair('对小微贷款运营的影响线', 'Micro-lending Impact Lines')}")
+        for item in brief["lanes"]:
+            st.markdown(
+                f"""
+                <div class="brief-panel">
+                    <h3>{safe_html(item.get("name", ""))}</h3>
+                    <div class="brief-meta">
+                        {title_pair("证据", "Evidence")}: {safe_html(item.get("evidence_count", 0))}
+                        · {title_pair("高影响", "High impact")}: {safe_html(item.get("high_impact_count", 0))}
+                        · {safe_html(item.get("priority", ""))}
+                    </div>
+                    <div class="compact-divider"></div>
+                    <strong>{title_pair("业务含义", "Business Meaning")}</strong><br>
+                    {safe_html(item.get("why", ""))}<br><br>
+                    <strong>{title_pair("建议动作", "Suggested Action")}</strong><br>
+                    {safe_html(item.get("next_action", ""))}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+    with right:
+        st.markdown(f"#### {title_pair('本周研究动作', 'This Week Actions')}")
+        for item in brief["actions"]:
+            st.markdown(
+                f"""
+                <div class="brief-action">
+                    <strong>{safe_html(item.get("name", ""))}</strong><br>
+                    <span class="brief-meta">{safe_html(item.get("priority", ""))} · {title_pair("证据", "Evidence")}: {safe_html(item.get("evidence_count", 0))}</span>
+                    <div class="compact-divider"></div>
+                    {safe_html(item.get("recommended_action", ""))}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(f"#### {title_pair('仍需补强', 'Gaps To Close')}")
+        for item in brief["gaps"]:
+            st.markdown(
+                f"""
+                <div class="brief-gap">
+                    <strong>{safe_html(item.get("name", ""))}</strong>
+                    <span class="brief-meta"> · {safe_html(item.get("coverage", ""))}</span><br>
+                    {safe_html(item.get("gap", ""))}<br>
+                    <span class="brief-meta">{safe_html(item.get("next_source", ""))}</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
 def main() -> None:
     apply_app_style()
     render_language_switcher()
@@ -1999,59 +2168,92 @@ def main() -> None:
     render_overview(conn)
     tabs = st.tabs(
         [
-            title_pair("健康", "Health"),
-            title_pair("数据源", "Sources"),
-            title_pair("新信号", "New Signals"),
-            title_pair("业务解读", "Intelligence"),
-            title_pair("市场声音", "Market Voice"),
-            title_pair("趋势变化", "Trends"),
-            title_pair("本周行动", "Actions"),
-            title_pair("竞品观察", "Competitor Watch"),
-            title_pair("竞品矩阵", "Competitor Matrix"),
-            title_pair("复核驾驶舱", "Review Cockpit"),
-            title_pair("复核队列", "Review Queue"),
-            title_pair("笔记", "Notes"),
-            title_pair("问题", "Questions"),
-            title_pair("支付轨道", "Payment Rails"),
-            title_pair("周报", "Weekly Notes"),
-            title_pair("能力", "Capability"),
-            title_pair("护栏", "Guardrails"),
+            title_pair("研究首页", "Brief"),
+            title_pair("业务影响", "Ops Impact"),
+            title_pair("市场竞品", "Market & Competitors"),
+            title_pair("复核工作台", "Review"),
+            title_pair("来源健康", "Sources & Health"),
+            title_pair("输出与边界", "Outputs & Guardrails"),
         ]
     )
     with tabs[0]:
-        render_deployment_health(conn)
+        render_research_brief_home(conn)
     with tabs[1]:
-        render_sources(conn)
+        impact_tabs = st.tabs(
+            [
+                title_pair("业务解读", "Intelligence"),
+                title_pair("趋势变化", "Trends"),
+                title_pair("本周行动", "Actions"),
+                title_pair("支付轨道", "Payment Rails"),
+            ]
+        )
+        with impact_tabs[0]:
+            render_business_intelligence(conn)
+        with impact_tabs[1]:
+            render_trend_changes(conn)
+        with impact_tabs[2]:
+            render_weekly_actions(conn)
+        with impact_tabs[3]:
+            render_payment_rails(conn)
     with tabs[2]:
-        render_new_signals(conn)
+        market_tabs = st.tabs(
+            [
+                title_pair("市场声音", "Market Voice"),
+                title_pair("竞品矩阵", "Competitor Matrix"),
+                title_pair("竞品观察", "Competitor Watch"),
+            ]
+        )
+        with market_tabs[0]:
+            render_market_voice(conn)
+        with market_tabs[1]:
+            render_competitor_matrix(conn)
+        with market_tabs[2]:
+            render_competitor_watch(conn)
     with tabs[3]:
-        render_business_intelligence(conn)
+        review_tabs = st.tabs(
+            [
+                title_pair("复核驾驶舱", "Review Cockpit"),
+                title_pair("新信号", "New Signals"),
+                title_pair("复核队列", "Review Queue"),
+            ]
+        )
+        with review_tabs[0]:
+            render_review_cockpit(conn)
+        with review_tabs[1]:
+            render_new_signals(conn)
+        with review_tabs[2]:
+            render_review_queue(conn)
     with tabs[4]:
-        render_market_voice(conn)
+        source_tabs = st.tabs(
+            [
+                title_pair("部署健康", "Deploy Health"),
+                title_pair("数据源", "Sources"),
+            ]
+        )
+        with source_tabs[0]:
+            render_deployment_health(conn)
+        with source_tabs[1]:
+            render_sources(conn)
     with tabs[5]:
-        render_trend_changes(conn)
-    with tabs[6]:
-        render_weekly_actions(conn)
-    with tabs[7]:
-        render_competitor_watch(conn)
-    with tabs[8]:
-        render_competitor_matrix(conn)
-    with tabs[9]:
-        render_review_cockpit(conn)
-    with tabs[10]:
-        render_review_queue(conn)
-    with tabs[11]:
-        render_research_notes(conn)
-    with tabs[12]:
-        render_market_questions(conn)
-    with tabs[13]:
-        render_payment_rails(conn)
-    with tabs[14]:
-        render_brief_draft(conn)
-    with tabs[15]:
-        render_capability_tracker(conn)
-    with tabs[16]:
-        render_guardrails()
+        output_tabs = st.tabs(
+            [
+                title_pair("周报", "Weekly Notes"),
+                title_pair("笔记", "Notes"),
+                title_pair("问题", "Questions"),
+                title_pair("能力", "Capability"),
+                title_pair("护栏", "Guardrails"),
+            ]
+        )
+        with output_tabs[0]:
+            render_brief_draft(conn)
+        with output_tabs[1]:
+            render_research_notes(conn)
+        with output_tabs[2]:
+            render_market_questions(conn)
+        with output_tabs[3]:
+            render_capability_tracker(conn)
+        with output_tabs[4]:
+            render_guardrails()
 
 
 if __name__ == "__main__":

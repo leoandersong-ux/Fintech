@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-19T12:50:07.260826+00:00",
-  "app_version": "v0.6",
-  "app_version_label": "v0.6 Market Voice and Trend Layer",
+  "generated_at": "2026-05-19T13:08:00.532881+00:00",
+  "app_version": "v0.7",
+  "app_version_label": "v0.7 Research Brief Readability Layer",
   "counts": {
     "signals": 223,
     "reviewed": 70,
@@ -2918,5 +2918,329 @@
   "guardrails": {
     "cn": "仅使用公开来源；不使用私人、雇主、借款人、登录页、私域群组或专有数据；输出是个人研究判断，不是法律/合规结论。",
     "en": "Use public sources only; no private, employer, borrower, logged-in, private-group, or proprietary data; outputs are personal research judgments, not legal/compliance conclusions."
+  },
+  "reading_brief_zh": {
+    "counts": {
+      "signals": 223,
+      "reviewed": 70,
+      "new": 0,
+      "market_questions": 6,
+      "competitor_matrix_rows": 16
+    },
+    "generated_at": "2026-05-19T13:08:00.532881+00:00",
+    "topline": [
+      {
+        "id": "1",
+        "title": "DFS Incident Reporting System lists mobile payment fraud and incomplete transaction as reportable public categories",
+        "classification": "complaint",
+        "risk": "high",
+        "why": "官方/高可信公开来源；直接影响小微贷款运营流程；需要优先人工回源；高风险标签",
+        "recommended_use": "放入首页 Top 5，并回源复核",
+        "source": "ZICTA DFS Incident Reporting System",
+        "source_link": "https://dfscomplaints.zicta.zm/"
+      },
+      {
+        "id": "24",
+        "title": "In particular, businesses are required to clearly communicate key terms relating to their services, including operating hours, conditions for access, pricing, and any limitations that may reasonably affect a consumer’s decision to engage with the service. Where such information is provided, it shoul",
+        "classification": "fees",
+        "risk": "high",
+        "why": "官方/高可信公开来源；直接影响小微贷款运营流程；需要优先人工回源；高风险标签",
+        "recommended_use": "放入首页 Top 5，并回源复核",
+        "source": "Competition and Consumer Protection Commission Notices",
+        "source_link": "https://www.ccpc.org.zm/#item-104"
+      },
+      {
+        "id": "185",
+        "title": "Data Protection Enforcement: Ensure the effective enforcement of data protection laws in Zambia, safeguarding the privacy rights of individuals",
+        "classification": "privacy",
+        "risk": "high",
+        "why": "官方/高可信公开来源；直接影响小微贷款运营流程；需要优先人工回源；高风险标签",
+        "recommended_use": "放入首页 Top 5，并回源复核",
+        "source": "Data Protection Commission Zambia",
+        "source_link": "https://www.dataprotection.gov.zm/#item-77"
+      },
+      {
+        "id": "187",
+        "title": "Public Education: Educate individuals and organizations about data protection rights and responsibilities, fostering a culture of privacy awareness",
+        "classification": "privacy",
+        "risk": "high",
+        "why": "官方/高可信公开来源；直接影响小微贷款运营流程；需要优先人工回源；高风险标签",
+        "recommended_use": "放入首页 Top 5，并回源复核",
+        "source": "Data Protection Commission Zambia",
+        "source_link": "https://www.dataprotection.gov.zm/#item-79"
+      }
+    ],
+    "lanes": [
+      {
+        "name": "监管与支付轨道",
+        "priority": "优先推进",
+        "why": "这条线决定贷款产品能不能稳定放款、正确入账、解释费用，并在监管/消费者保护语境下保持可复核。",
+        "next_action": "固定追踪 BoZ 支付系统、CCPC 消费者保护、DPC 数据保护；每条信号都映射到产品页面、支付异常、客服话术或复核清单。",
+        "evidence_count": 55,
+        "high_impact_count": 48
+      },
+      {
+        "name": "竞品产品矩阵",
+        "priority": "优先推进",
+        "why": "竞品变化最有价值的部分不是“谁存在”，而是额度、期限、费用表达、速度承诺、支付方式、客服/隐私入口如何组合成产品打法。",
+        "next_action": "把已复核竞品信号继续结构化成额度档、期限、速度、支付成熟度、客服/隐私成熟度和公开信息缺口。",
+        "evidence_count": 25,
+        "high_impact_count": 13
+      },
+      {
+        "name": "投诉、客服与舆情",
+        "priority": "优先推进",
+        "why": "这条线更接近真实用户摩擦：不到账、扣费不清、客服解释不足、欺诈、账号或钱包问题，都会直接影响坏账、投诉和口碑。",
+        "next_action": "增加公开 app listing/review、公开新闻和公开投诉关键词 watchlist；只抓公开页面，不碰登录、私域群组或借款人数据。",
+        "evidence_count": 8,
+        "high_impact_count": 7
+      },
+      {
+        "name": "催收与客户沟通",
+        "priority": "优先推进",
+        "why": "催收风险通常不会先以政策文件出现，而会从投诉、隐私边界、联系人使用、逾期解释和客服升级里显形。",
+        "next_action": "在投诉/评论来源中强化 overdue、late payment、collection、harassment、contact、privacy 等关键词，并把结果映射到催收话术和升级边界。",
+        "evidence_count": 18,
+        "high_impact_count": 18
+      },
+      {
+        "name": "周报解读与部署数据层",
+        "priority": "优先推进",
+        "why": "平台的价值不在抓取次数，而在每周能不能产出一份可读、可复核、能指导学习重点的个人研究笔记。",
+        "next_action": "云端展示用 GitHub snapshot 和生成的 Markdown/CSV，本地继续保留 SQLite 作为研究库；节点版本同步后让 Streamlit 自动刷新。",
+        "evidence_count": 70,
+        "high_impact_count": 55
+      }
+    ],
+    "actions": [
+      {
+        "name": "监管、消费者保护与运营约束",
+        "priority": "本周优先",
+        "trigger": "18 条相关公开信号；本窗口变化 +18。",
+        "recommended_action": "只把监管信号映射为待复核流程，不把公开页面表述当作法律或合规结论。",
+        "owner": "个人研究复核",
+        "evidence_count": 18
+      },
+      {
+        "name": "竞品产品与 App 层变化",
+        "priority": "本周优先",
+        "trigger": "14 条相关公开信号；本窗口变化 +14。",
+        "recommended_action": "继续维护竞品矩阵；Google Play/app listing 先作为候选源，确认边界后再启用。",
+        "owner": "个人研究复核",
+        "evidence_count": 14
+      },
+      {
+        "name": "费用、定价与披露摩擦",
+        "priority": "本周优先",
+        "trigger": "14 条相关公开信号；本窗口变化 +14。",
+        "recommended_action": "把总成本、费用名称、扣款时点、第三方费用和逾期费用拆开复核，避免客户把支付轨道费用误认为贷款费用。",
+        "owner": "个人研究复核",
+        "evidence_count": 14
+      },
+      {
+        "name": "隐私、权限与账户控制",
+        "priority": "本周优先",
+        "trigger": "12 条相关公开信号；本窗口变化 +12。",
+        "recommended_action": "为每类数据写清收集目的、使用场景、保存期限、共享对象和客户权利入口，尤其关注联系人、设备、位置和交易数据。",
+        "owner": "个人研究复核",
+        "evidence_count": 12
+      },
+      {
+        "name": "放款/支付失败与到账摩擦",
+        "priority": "本周优先",
+        "trigger": "9 条相关公开信号；本窗口变化 +9。",
+        "recommended_action": "建立支付异常分流表：到账慢、扣款失败、重复扣款、还款未入账分别对应证据、SLA、客服话术和升级负责人。",
+        "owner": "个人研究复核",
+        "evidence_count": 9
+      }
+    ],
+    "gaps": [
+      {
+        "name": "监管/政策",
+        "coverage": "中高",
+        "gap": "已有 BoZ、CCPC、DPC，但仍偏政策文件，需要转成业务流程影响。",
+        "next_source": "继续 BoZ JSON:API、CCPC、DPC；补 BoZ publications/annual reports 的稳定文件路径。"
+      },
+      {
+        "name": "竞品",
+        "coverage": "中低",
+        "gap": "phase-1 官网/FAQ watchlist 已建立并完成首轮复核，但 Google Play/app listing 和公开评论层仍未默认启用。",
+        "next_source": "把已复核官网信号整理成竞品矩阵；再决定是否启用 Google Play/public app listing，用于观察 app 权限、评分、公开评论主题。"
+      },
+      {
+        "name": "投诉/客服",
+        "coverage": "中低",
+        "gap": "已有 ZICTA/CCPC/BoZ complaint 信号，但缺少真实公开用户评论和投诉主题趋势。",
+        "next_source": "运行 ZICTA DFS 两个源；补公开 app review、公开新闻和公开社媒页面的低频监控。"
+      },
+      {
+        "name": "舆情/声誉",
+        "coverage": "低",
+        "gap": "目前多为官方叙事，不能代表借款人声音或品牌舆情。",
+        "next_source": "增加公开新闻搜索结果、公开 app reviews、公开 Facebook/LinkedIn 页面，仅限无需登录内容。"
+      }
+    ]
+  },
+  "reading_brief_en": {
+    "counts": {
+      "signals": 223,
+      "reviewed": 70,
+      "new": 0,
+      "market_questions": 6,
+      "competitor_matrix_rows": 16
+    },
+    "generated_at": "2026-05-19T13:08:00.532881+00:00",
+    "topline": [
+      {
+        "id": "1",
+        "title": "DFS Incident Reporting System lists mobile payment fraud and incomplete transaction as reportable public categories",
+        "classification": "complaint",
+        "risk": "high",
+        "why": "official or high-trust public source; directly affects micro-lending operations; needs priority source review; high-risk label",
+        "recommended_use": "Put in Top 5 and source-review",
+        "source": "ZICTA DFS Incident Reporting System",
+        "source_link": "https://dfscomplaints.zicta.zm/"
+      },
+      {
+        "id": "24",
+        "title": "In particular, businesses are required to clearly communicate key terms relating to their services, including operating hours, conditions for access, pricing, and any limitations that may reasonably affect a consumer’s decision to engage with the service. Where such information is provided, it shoul",
+        "classification": "fees",
+        "risk": "high",
+        "why": "official or high-trust public source; directly affects micro-lending operations; needs priority source review; high-risk label",
+        "recommended_use": "Put in Top 5 and source-review",
+        "source": "Competition and Consumer Protection Commission Notices",
+        "source_link": "https://www.ccpc.org.zm/#item-104"
+      },
+      {
+        "id": "185",
+        "title": "Data Protection Enforcement: Ensure the effective enforcement of data protection laws in Zambia, safeguarding the privacy rights of individuals",
+        "classification": "privacy",
+        "risk": "high",
+        "why": "official or high-trust public source; directly affects micro-lending operations; needs priority source review; high-risk label",
+        "recommended_use": "Put in Top 5 and source-review",
+        "source": "Data Protection Commission Zambia",
+        "source_link": "https://www.dataprotection.gov.zm/#item-77"
+      },
+      {
+        "id": "187",
+        "title": "Public Education: Educate individuals and organizations about data protection rights and responsibilities, fostering a culture of privacy awareness",
+        "classification": "privacy",
+        "risk": "high",
+        "why": "official or high-trust public source; directly affects micro-lending operations; needs priority source review; high-risk label",
+        "recommended_use": "Put in Top 5 and source-review",
+        "source": "Data Protection Commission Zambia",
+        "source_link": "https://www.dataprotection.gov.zm/#item-79"
+      }
+    ],
+    "lanes": [
+      {
+        "name": "Regulatory and Payment Rails",
+        "priority": "Priority",
+        "why": "This lane determines whether the lending product can disburse reliably, post repayments correctly, explain fees, and remain reviewable under regulatory and consumer-protection expectations.",
+        "next_action": "Keep watching BoZ payment systems, CCPC consumer protection, and DPC data protection; map each signal to product screens, payment exceptions, support scripts, or review checklists.",
+        "evidence_count": 55,
+        "high_impact_count": 48
+      },
+      {
+        "name": "Competitor Product Matrix",
+        "priority": "Priority",
+        "why": "The useful part of competitor monitoring is not who exists, but how limits, tenor, pricing language, speed promises, payment methods, support, and privacy routes form product strategy.",
+        "next_action": "Keep structuring reviewed competitor signals into limit tier, tenor, speed, payment maturity, support/privacy maturity, and evidence gaps.",
+        "evidence_count": 25,
+        "high_impact_count": 13
+      },
+      {
+        "name": "Complaints, Support, and Reputation",
+        "priority": "Priority",
+        "why": "This lane is closest to real user friction: delayed payout, unclear charges, weak support explanations, fraud, account, or wallet issues directly affect credit loss, complaints, and reputation.",
+        "next_action": "Add public app listing/review, public news, and public complaint-keyword watchlists; use only public pages, not logged-in spaces, private groups, or borrower data.",
+        "evidence_count": 8,
+        "high_impact_count": 7
+      },
+      {
+        "name": "Collections and Customer Communication",
+        "priority": "Priority",
+        "why": "Collections risk often appears first through complaints, privacy boundaries, contact-person usage, overdue explanations, and support escalation rather than formal policy documents.",
+        "next_action": "Strengthen overdue, late payment, collection, harassment, contact, and privacy keywords in complaint/review sources, then map results to collections scripts and escalation boundaries.",
+        "evidence_count": 18,
+        "high_impact_count": 18
+      },
+      {
+        "name": "Brief Interpretation and Deployment Data Layer",
+        "priority": "Priority",
+        "why": "The platform's value is not crawl volume. It is whether each week produces a readable, source-linked note that guides learning priorities.",
+        "next_action": "Use GitHub snapshots and generated Markdown/CSV for cloud display while keeping SQLite as the local research store; milestone sync should trigger Streamlit refresh.",
+        "evidence_count": 70,
+        "high_impact_count": 55
+      }
+    ],
+    "actions": [
+      {
+        "name": "Regulatory, Consumer Protection, and Operating Constraints",
+        "priority": "This-week priority",
+        "trigger": "18 related public signal(s); latest-window change +18.",
+        "recommended_action": "Map regulatory signals into process checks only; do not treat public-page wording as legal or compliance conclusions.",
+        "owner": "Personal research review",
+        "evidence_count": 18
+      },
+      {
+        "name": "Competitor Product and App-Layer Change",
+        "priority": "This-week priority",
+        "trigger": "14 related public signal(s); latest-window change +14.",
+        "recommended_action": "Keep maintaining the competitor matrix; keep Google Play/app listings as candidate sources until source boundaries are confirmed.",
+        "owner": "Personal research review",
+        "evidence_count": 14
+      },
+      {
+        "name": "Fees, Pricing, and Disclosure Friction",
+        "priority": "This-week priority",
+        "trigger": "14 related public signal(s); latest-window change +14.",
+        "recommended_action": "Review total cost, fee labels, deduction timing, third-party fees, and late fees separately so rail fees are not mistaken for loan fees.",
+        "owner": "Personal research review",
+        "evidence_count": 14
+      },
+      {
+        "name": "Privacy, Permissions, and Account Control",
+        "priority": "This-week priority",
+        "trigger": "12 related public signal(s); latest-window change +12.",
+        "recommended_action": "Document purpose, use case, retention, sharing party, and rights channel for each data type, especially contacts, device, location, and transaction data.",
+        "owner": "Personal research review",
+        "evidence_count": 12
+      },
+      {
+        "name": "Disbursement and Payment-Failure Friction",
+        "priority": "This-week priority",
+        "trigger": "9 related public signal(s); latest-window change +9.",
+        "recommended_action": "Build a payment-exception routing table for delayed payout, failed deduction, duplicate deduction, and unposted repayment, with evidence, SLA, support script, and owner.",
+        "owner": "Personal research review",
+        "evidence_count": 9
+      }
+    ],
+    "gaps": [
+      {
+        "name": "Regulatory and Policy",
+        "coverage": "Medium-high",
+        "gap": "BoZ, CCPC, and DPC exist, but many signals are policy documents and need process-level interpretation.",
+        "next_source": "Continue BoZ JSON:API, CCPC, DPC; add stable BoZ publications/annual-report file routes."
+      },
+      {
+        "name": "Competitors",
+        "coverage": "Medium-low",
+        "gap": "The phase-1 website/FAQ watchlist exists and has first-pass review, but Google Play/app listings and public-review sources remain disabled by default.",
+        "next_source": "Turn reviewed website signals into a competitor matrix; then decide whether to enable Google Play/public app listings for app permissions, ratings, and public-review themes."
+      },
+      {
+        "name": "Complaints and Support",
+        "coverage": "Medium-low",
+        "gap": "ZICTA/CCPC/BoZ complaint signals exist, but real public user-review and complaint-theme trend sources are missing.",
+        "next_source": "Run both ZICTA DFS sources; add low-frequency public app review, public news, and public social-page monitoring."
+      },
+      {
+        "name": "Sentiment and Reputation",
+        "coverage": "Low",
+        "gap": "Current signals are mostly official narratives and do not represent borrower voice or brand sentiment.",
+        "next_source": "Add public news results, public app reviews, and public Facebook/LinkedIn pages, only where no login is required."
+      }
+    ]
   }
 }

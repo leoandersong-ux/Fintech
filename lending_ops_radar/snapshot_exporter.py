@@ -26,6 +26,7 @@ from lending_ops_radar.intelligence import (
 )
 from lending_ops_radar.pipeline import DEFAULT_DB
 from lending_ops_radar.quality import build_quality_rows, summary_counts
+from lending_ops_radar.reading_brief import build_reading_brief
 from lending_ops_radar.trends import market_voice_rows, source_trend_rows, trend_rows, weekly_action_rows
 from lending_ops_radar.version import APP_VERSION, APP_VERSION_LABEL
 
@@ -106,7 +107,7 @@ def build_snapshot(conn: sqlite3.Connection) -> dict[str, Any]:
     voice_items = market_voice_rows(conn, limit=40)
     action_items = weekly_action_rows(conn, limit=8)
     source_trends = source_trend_rows(conn)
-    return {
+    snapshot = {
         "schema_version": 1,
         "generated_at": datetime.now(UTC).isoformat(),
         "app_version": APP_VERSION,
@@ -147,6 +148,9 @@ def build_snapshot(conn: sqlite3.Connection) -> dict[str, Any]:
             "en": "Use public sources only; no private, employer, borrower, logged-in, private-group, or proprietary data; outputs are personal research judgments, not legal/compliance conclusions.",
         },
     }
+    snapshot["reading_brief_zh"] = build_reading_brief(snapshot, language="zh")
+    snapshot["reading_brief_en"] = build_reading_brief(snapshot, language="en")
+    return snapshot
 
 
 def write_snapshot(snapshot: dict[str, Any], output_path: Path) -> Path:

@@ -31,9 +31,16 @@ The Streamlit dashboard now defaults to a cleaner Chinese reading mode:
 
 ## Intelligence Reading Layer
 
-The most useful reading view is now the Streamlit tab `业务解读 Intelligence`.
+The main reading entry is now the Streamlit tab `研究首页 Brief`.
 
-It converts reviewed public signals into:
+It puts the existing intelligence layers into a clearer reading order:
+
+- top public signals to read first,
+- micro-lending operating impact lines,
+- this-week research actions,
+- coverage gaps that still need source work.
+
+The detailed `业务影响 Ops Impact` tab still converts reviewed public signals into:
 
 - `业务判断 | Business interpretation`
 - `小微贷款业务影响矩阵 | Micro-lending impact matrix`
@@ -105,6 +112,17 @@ View trend rows from CLI:
 ```powershell
 & '.\.venv-lending\Scripts\python.exe' .\lending_ops_radar\trends.py --mode trends --language zh
 ```
+
+## Research Brief Readability Layer
+
+`v0.7` improves the platform as a personal research workspace:
+
+- Page title and snapshot now show `v0.7`.
+- Top navigation is reduced to six research areas instead of many scattered tabs.
+- `reading_brief.py` turns snapshot data into a compact brief model for Streamlit.
+- The first tab reads like a research brief: conclusion, impact, action, and gap.
+- The snapshot JSON includes `reading_brief_zh` and `reading_brief_en` for cloud deployment.
+- A small unittest suite guards the brief model and obvious garbled text handling.
 
 ## Guardrails
 
