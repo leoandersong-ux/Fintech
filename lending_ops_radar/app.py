@@ -26,10 +26,12 @@ from lending_ops_radar.brief_generator import (
     render_brief,
 )
 from lending_ops_radar.competitor_intelligence import (
+    build_competitor_comparison_rows,
     build_competitor_event_rows,
     build_competitor_overview_rows,
     build_competitor_universe,
     build_policy_impact_rows,
+    build_positioning_group_rows,
     build_watch_panel_rows,
     grouped_competitor_counts,
 )
@@ -229,6 +231,35 @@ APP_CSS = """
         font-weight: 800;
         font-size: 1rem;
     }
+    .position-card {
+        background: #ffffff;
+        border: 1px solid #dce4df;
+        border-radius: 8px;
+        padding: 0.85rem 0.95rem;
+        min-height: 215px;
+        margin-bottom: 0.75rem;
+    }
+    .position-card .position-title {
+        color: #153a32;
+        font-weight: 800;
+        font-size: 1.02rem;
+        line-height: 1.25;
+    }
+    .position-card .impact-line {
+        background: #f8faf7;
+        border-radius: 6px;
+        padding: 0.45rem 0.55rem;
+        margin-top: 0.55rem;
+        color: #31423a;
+        font-size: 0.9rem;
+    }
+    .matrix-slim-table {
+        border: 1px solid #dfe8dd;
+        border-radius: 8px;
+        padding: 0.65rem;
+        background: #fbfcfb;
+        margin: 0.5rem 0 1rem 0;
+    }
     .mini-status {
         display: inline-block;
         border-radius: 999px;
@@ -365,6 +396,27 @@ COLUMN_LABELS = {
     "source_signal_ids": "来源信号ID | Source IDs",
     "source_links": "来源链接 | Source Links",
     "source_status": "来源状态 | Source Status",
+    "positioning_cn": "竞品定位 | Positioning",
+    "positioning_en": "Positioning | EN",
+    "positioning_group_cn": "定位分组 | Positioning Group",
+    "positioning_group_en": "Positioning Group | EN",
+    "product_lane_cn": "产品形态 | Product Lane",
+    "product_lane_en": "Product Lane | EN",
+    "target_segment_cn": "目标客群 | Target Segment",
+    "target_segment_en": "Target Segment | EN",
+    "channel_model_cn": "渠道/触达模型 | Channel Model",
+    "channel_model_en": "Channel Model | EN",
+    "ops_impact_cn": "对小微贷款业务影响 | Ops Impact",
+    "ops_impact_en": "Micro-lending Ops Impact | EN",
+    "evidence_mode_cn": "证据状态 | Evidence Mode",
+    "evidence_mode_en": "Evidence Mode | EN",
+    "product_matrix_rows": "产品矩阵行数 | Product Rows",
+    "policy_pressure_count": "政策压力点 | Policy Pressure",
+    "target_count": "对象数 | Targets",
+    "reviewed_count": "已复核对象 | Reviewed",
+    "candidate_count": "候选对象 | Candidates",
+    "product_lanes_cn": "产品形态组合 | Product Lanes",
+    "product_lanes_en": "Product Lanes | EN",
     "product_layer_cn": "产品层 | Product Layer",
     "product_layer_en": "Product Layer | EN",
     "limit_value_zmw": "额度数值ZMW | Limit Value",
@@ -1361,6 +1413,18 @@ def render_competitor_status_cards(rows: list[dict[str, object]], limit: int | N
                 if source_link
                 else ""
             )
+            positioning = localized_value(row, "positioning")
+            product_lane = localized_value(row, "product_lane")
+            ops_impact = localized_value(row, "ops_impact")
+            analysis_html = ""
+            if positioning or product_lane or ops_impact:
+                analysis_html = f"""
+                    <div class="compact-divider"></div>
+                    <strong>{title_pair("定位/产品", "Positioning / Product")}</strong><br>
+                    {safe_html(positioning)}<br>
+                    <span class="brief-meta">{safe_html(product_lane)}</span><br>
+                    <div class="impact-line">{safe_html(ops_impact)}</div>
+                """
             st.markdown(
                 f"""
                 <div class="status-grid-card">
@@ -1375,9 +1439,73 @@ def render_competitor_status_cards(rows: list[dict[str, object]], limit: int | N
                     {safe_html(localized_value(row, "matrix_status"))}<br><br>
                     <strong>{title_pair("观察", "Watch")}</strong><br>
                     {safe_html(localized_value(row, "watch_summary"))}<br>
+                    {analysis_html}
                     <div class="brief-meta">
                         {title_pair("政策压力", "Policy pressure")}: {safe_html(row.get("policy_pressure_count", 0))}
                         · {title_pair("产品矩阵", "Product rows")}: {safe_html(row.get("product_matrix_rows", 0))}
+                        · {source_html}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def render_positioning_group_cards(rows: list[dict[str, object]]) -> None:
+    columns = st.columns(3)
+    for index, row in enumerate(rows):
+        with columns[index % 3]:
+            st.markdown(
+                f"""
+                <div class="position-card">
+                    <div class="position-title">{safe_html(localized_value(row, "positioning"))}</div>
+                    <div class="brief-meta">
+                        {title_pair("对象", "Targets")}: {safe_html(row.get("target_count", 0))}
+                        · {title_pair("已复核", "Reviewed")}: {safe_html(row.get("reviewed_count", 0))}
+                        · {title_pair("候选", "Candidates")}: {safe_html(row.get("candidate_count", 0))}
+                    </div>
+                    <div class="compact-divider"></div>
+                    <strong>{title_pair("机构", "Institutions")}</strong><br>
+                    {safe_html(row.get("institutions", ""))}<br><br>
+                    <strong>{title_pair("产品形态", "Product Lanes")}</strong><br>
+                    {safe_html(localized_value(row, "product_lanes"))}
+                    <div class="impact-line">{safe_html(localized_value(row, "business_read"))}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def render_competitor_position_cards(rows: list[dict[str, object]], limit: int | None = None) -> None:
+    selected = rows[:limit] if limit else rows
+    columns = st.columns(3)
+    for index, row in enumerate(selected):
+        with columns[index % 3]:
+            source_link = _first_source_link(row)
+            source_html = (
+                f'<a href="{safe_html(source_link)}" target="_blank">{title_pair("来源", "Source")}</a>'
+                if source_link
+                else ""
+            )
+            st.markdown(
+                f"""
+                <div class="position-card">
+                    <div class="position-title">{safe_html(row.get("institution", ""))}</div>
+                    <div class="brief-meta">{safe_html(localized_value(row, "positioning"))}</div>
+                    <div>
+                        <span class="mini-status">{safe_html(localized_value(row, "watch_priority"))}</span>
+                        <span class="mini-status">{safe_html(localized_value(row, "evidence_mode"))}</span>
+                    </div>
+                    <div class="compact-divider"></div>
+                    <strong>{title_pair("产品形态", "Product Lane")}</strong><br>
+                    {safe_html(localized_value(row, "product_lane"))}<br><br>
+                    <strong>{title_pair("客群/渠道", "Segment / Channel")}</strong><br>
+                    {safe_html(localized_value(row, "target_segment"))}<br>
+                    <span class="brief-meta">{safe_html(localized_value(row, "channel_model"))}</span>
+                    <div class="impact-line">{safe_html(localized_value(row, "ops_impact"))}</div>
+                    <div class="brief-meta">
+                        {title_pair("政策压力", "Policy pressure")}: {safe_html(row.get("policy_pressure_count", 0))}
+                        · {title_pair("产品行", "Product rows")}: {safe_html(row.get("product_matrix_rows", 0))}
                         · {source_html}
                     </div>
                 </div>
@@ -1615,20 +1743,81 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
     rows = build_product_matrix(conn)
     snapshot = load_dashboard_snapshot()
     overview_rows = snapshot_list(snapshot, "competitor_overview_rows") or build_competitor_overview_rows(rows)
+    comparison_rows = snapshot_list(snapshot, "competitor_comparison_rows") or build_competitor_comparison_rows(rows)
+    positioning_group_rows = snapshot_list(snapshot, "competitor_positioning_group_rows") or build_positioning_group_rows(comparison_rows)
     overview_df = pd.DataFrame(overview_rows)
-    st.markdown(f"#### {title_pair('竞品总览矩阵', 'Competitor Overview Matrix')}")
+    comparison_df = pd.DataFrame(comparison_rows)
+
+    st.markdown(f"#### {title_pair('横向定位地图', 'Positioning Map')}")
     st.markdown(
         f"""
         <div class="matrix-band">
         {ui_text(
-            "总览矩阵覆盖所有观察对象；产品矩阵只覆盖已复核到产品字段的对象。这样既能看到全市场，又不会把候选信号误读成已确认产品事实。",
-            "The overview matrix covers every watch target; the product matrix covers only targets with reviewed product-field evidence. This keeps market coverage broad without treating candidates as confirmed product facts."
+            "这一层回答“各家到底像什么类型的玩家”。它把核心数字贷、工资/微贷、社会影响金融、消费/资产金融、支付轨道和信贷基础设施分开，先建立可读的市场坐标。",
+            "This layer answers what type of player each target appears to be. It separates core digital lenders, payroll/MFI players, impact finance, consumer/asset finance, payment rails, and credit infrastructure before detailed product comparison."
         )}
         </div>
         """,
         unsafe_allow_html=True,
     )
-    render_competitor_status_cards(overview_rows)
+    render_positioning_group_cards(positioning_group_rows)
+
+    st.markdown(f"#### {title_pair('全量观察版产品矩阵', 'All-Target Product Matrix')}")
+    st.markdown(
+        f"""
+        <div class="matrix-band">
+        {ui_text(
+            "这张矩阵覆盖全部观察对象。已复核对象使用产品矩阵字段；未复核对象使用公开来源候选定位，并明确标注“候选定位/待回源”。所以它可以横向比较，但不会把候选判断伪装成事实。",
+            "This matrix covers every watch target. Reviewed targets use product-matrix fields; unreviewed targets use source-candidate positioning and are clearly marked as provisional. It supports comparison without pretending candidate reads are confirmed facts."
+        )}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    render_competitor_position_cards(comparison_rows)
+
+    with st.expander(title_pair("横向比较表：定位、产品、客群、渠道、业务影响", "Comparison Table: Positioning, Product, Segment, Channel, Impact"), expanded=True):
+        if comparison_df.empty:
+            st.info(ui_text("暂无全量竞品比较数据。", "No competitor comparison rows yet."))
+        else:
+            comparison_cols = [
+                "institution",
+                "positioning_group_cn",
+                "positioning_group_en",
+                "positioning_cn",
+                "positioning_en",
+                "product_lane_cn",
+                "product_lane_en",
+                "target_segment_cn",
+                "target_segment_en",
+                "channel_model_cn",
+                "channel_model_en",
+                "ops_impact_cn",
+                "ops_impact_en",
+                "evidence_mode_cn",
+                "evidence_mode_en",
+                "product_matrix_rows",
+                "policy_pressure_count",
+                "source_links",
+            ]
+            st.markdown('<div class="matrix-slim-table">', unsafe_allow_html=True)
+            display_df(comparison_df[comparison_cols])
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown(f"#### {title_pair('证据状态层', 'Evidence Status Layer')}")
+    st.markdown(
+        f"""
+        <div class="matrix-band">
+        {ui_text(
+            "这里仅用于判断谁已经进入已复核产品矩阵，谁还需要回源。真正的横向比较请先看上方的定位地图和全量观察版产品矩阵。",
+            "This layer only shows who has entered the reviewed product matrix and who still needs source review. Use the positioning map and all-target matrix above for comparison."
+        )}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.expander(title_pair("查看证据状态卡片", "View Evidence Status Cards")):
+        render_competitor_status_cards(overview_rows)
     with st.expander(title_pair("完整竞品总览表", "Full Competitor Overview Table")):
         if overview_df.empty:
             st.info(ui_text("暂无竞品总览数据。", "No competitor overview rows yet."))

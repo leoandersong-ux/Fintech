@@ -142,6 +142,13 @@ View trend rows from CLI:
 - The watch page now shows one compact card per competitor or ecosystem target, including evidence level, matrix status, watch fields, policy-pressure count, and source link.
 - This keeps the page readable while making it obvious that the platform tracks more than the first few lenders.
 
+`v0.8.2` turns that coverage into an actual comparison layer:
+
+- The matrix now starts with a positioning map that groups competitors into readable player types.
+- The all-target product matrix covers all 19 watch targets with positioning, product lane, target segment, channel model, micro-lending ops impact, evidence mode, and policy pressure.
+- Reviewed product facts remain separate from provisional candidate positioning.
+- Competitor watch cards now include positioning and product-lane context, so the page is no longer only a status list.
+
 ## Guardrails
 
 - Public pages only.

@@ -610,6 +610,395 @@ def _product_counts(product_rows: Iterable[dict[str, object]] | None) -> dict[st
     return counts
 
 
+POSITIONING_BY_INSTITUTION: dict[str, dict[str, str]] = {
+    "FLoan": {
+        "positioning_cn": "App-first 小额现金贷",
+        "positioning_en": "App-first microcash lender",
+        "product_lane_cn": "数字小额现金贷",
+        "product_lane_en": "Digital microcash loan",
+        "target_segment_cn": "个人短期周转借款人",
+        "target_segment_en": "Personal short-term cash borrowers",
+        "channel_model_cn": "App / 官网 / 移动支付线索",
+        "channel_model_en": "App / website / mobile-payment clues",
+        "ops_impact_cn": "重点影响额度展示、费用披露、放款到账、账户删除和客服入口。",
+        "ops_impact_en": "Main impact is on limit display, fee disclosure, payout posting, account deletion, and support routes.",
+    },
+    "Lupiya": {
+        "positioning_cn": "多产品数字信贷平台",
+        "positioning_en": "Multi-product digital lender",
+        "product_lane_cn": "短期贷 / 工资客群 / 农业 / 女性 / 平台司机",
+        "product_lane_en": "Short-term, salary, agriculture, women, and platform-driver loans",
+        "target_segment_cn": "多客群分层借款人",
+        "target_segment_en": "Multi-segment borrowers",
+        "channel_model_cn": "官网产品页 + 数字申请旅程",
+        "channel_model_en": "Website product pages plus digital application journey",
+        "ops_impact_cn": "重点影响客群分层、审批资料、还款节奏、产品上线状态和定价披露。",
+        "ops_impact_en": "Main impact is on segmentation, documentation, repayment rhythm, launch status, and pricing disclosure.",
+    },
+    "PowerKwacha": {
+        "positioning_cn": "App 小额贷与账户控制能力",
+        "positioning_en": "Small-loan app plus account-control capability",
+        "product_lane_cn": "数字小额贷 / 隐私与客服入口",
+        "product_lane_en": "Digital microloan / privacy and support routes",
+        "target_segment_cn": "移动端个人借款人",
+        "target_segment_en": "Mobile-first personal borrowers",
+        "channel_model_cn": "App / 官网 / Google Play 候选",
+        "channel_model_en": "App / website / Google Play candidate",
+        "ops_impact_cn": "重点影响隐私权限、客服响应、账户删除、投诉入口和 app 评价主题。",
+        "ops_impact_en": "Main impact is on privacy permissions, support response, account deletion, complaint routes, and app-review themes.",
+    },
+    "PremierCredit": {
+        "positioning_cn": "工资预支到 SME 的多层级信贷",
+        "positioning_en": "Multi-tier lender from salary advance to SME credit",
+        "product_lane_cn": "工资预支 / 个人贷 / SME 贷款",
+        "product_lane_en": "Salary advance, personal loan, and SME loan",
+        "target_segment_cn": "工薪个人与中小企业",
+        "target_segment_en": "Salary earners and SMEs",
+        "channel_model_cn": "官网借款旅程 + 移动钱包线索",
+        "channel_model_en": "Website borrowing journey plus mobile-wallet clues",
+        "ops_impact_cn": "重点影响大额审批、资料收集、移动钱包放款、企业贷风控和客服解释。",
+        "ops_impact_en": "Main impact is on larger-ticket approval, documentation, mobile-wallet payout, SME risk controls, and support explanations.",
+    },
+    "SuperKwacha": {
+        "positioning_cn": "App-first 小额贷候选",
+        "positioning_en": "App-first microloan candidate",
+        "product_lane_cn": "Google Play 公开 listing 候选",
+        "product_lane_en": "Public Google Play listing candidate",
+        "target_segment_cn": "移动端小额借款人",
+        "target_segment_en": "Mobile microloan borrowers",
+        "channel_model_cn": "App listing / Data Safety / 公开评分主题",
+        "channel_model_en": "App listing / Data Safety / public rating themes",
+        "ops_impact_cn": "重点影响 APR/费用披露、权限透明度、更新频率和公开舆情主题。",
+        "ops_impact_en": "Main impact is on APR/fee disclosure, permission transparency, update frequency, and public voice themes.",
+    },
+    "Finedge / ka Something": {
+        "positioning_cn": "多通道即时数字贷款",
+        "positioning_en": "Multichannel instant digital credit",
+        "product_lane_cn": "App / Web / USSD 数字贷款",
+        "product_lane_en": "App, web, and USSD digital loan",
+        "target_segment_cn": "线上与 USSD 入口借款人",
+        "target_segment_en": "Online and USSD-entry borrowers",
+        "channel_model_cn": "App / Web / USSD / mobile money / bank",
+        "channel_model_en": "App / web / USSD / mobile money / bank",
+        "ops_impact_cn": "重点影响获客入口、身份核验、放还款通道、失败交易对账和客服脚本。",
+        "ops_impact_en": "Main impact is on acquisition entry, identity checks, payout/repayment rails, failed-transaction reconciliation, and support scripts.",
+    },
+    "Phindu Credit": {
+        "positioning_cn": "个人与工资客群贷款候选",
+        "positioning_en": "Personal and salary-loan candidate",
+        "product_lane_cn": "个人贷 / Salary loan",
+        "product_lane_en": "Personal loan / salary loan",
+        "target_segment_cn": "工薪或可验证收入借款人",
+        "target_segment_en": "Salary or verifiable-income borrowers",
+        "channel_model_cn": "官网申请与人工回源",
+        "channel_model_en": "Website application and manual source review",
+        "ops_impact_cn": "重点影响收入证明、还款节奏、费用披露和催收沟通脚本。",
+        "ops_impact_en": "Main impact is on income proof, repayment rhythm, fee disclosure, and collections communication.",
+    },
+    "FairMoney Zambia": {
+        "positioning_cn": "个人数字贷款候选",
+        "positioning_en": "Personal digital-loan candidate",
+        "product_lane_cn": "个人贷 / FAQ / App listing 候选",
+        "product_lane_en": "Personal loan / FAQ / app-listing candidate",
+        "target_segment_cn": "个人线上借款人",
+        "target_segment_en": "Online personal borrowers",
+        "channel_model_cn": "官网产品页 + App listing 候选",
+        "channel_model_en": "Website product page plus app-listing candidate",
+        "ops_impact_cn": "重点影响额度、费用、FAQ 解释、客服入口和公开 app 主题。",
+        "ops_impact_en": "Main impact is on limits, fees, FAQ wording, support route, and public app themes.",
+    },
+    "Micro Finance Zambia": {
+        "positioning_cn": "传统微贷/薪资贷对照组",
+        "positioning_en": "Traditional microfinance/payroll benchmark",
+        "product_lane_cn": "薪资扣款 / 个人与企业微贷",
+        "product_lane_en": "Payroll-linked personal and business microfinance",
+        "target_segment_cn": "工薪、个人和小微经营者",
+        "target_segment_en": "Salary earners, individuals, and small businesses",
+        "channel_model_cn": "分支机构 / 官网 / 线下资料",
+        "channel_model_en": "Branch, website, and offline-document model",
+        "ops_impact_cn": "重点作为 app-first 模式的对照，观察资料要求、扣款机制和线下客服。",
+        "ops_impact_en": "Useful benchmark against app-first lending, especially documentation, deduction mechanics, and offline support.",
+    },
+    "SmartFin": {
+        "positioning_cn": "数字信用/公司动态候选",
+        "positioning_en": "Digital-credit and company-signal candidate",
+        "product_lane_cn": "个人/SME 信用活动候选",
+        "product_lane_en": "Individual and SME-credit activity candidate",
+        "target_segment_cn": "个人与中小企业候选客群",
+        "target_segment_en": "Individual and SME candidate segments",
+        "channel_model_cn": "公司公开页 / 招聘 / 合作线索",
+        "channel_model_en": "Company page, hiring, and partnership clues",
+        "ops_impact_cn": "重点影响市场扩张判断、渠道合作、招聘动作和产品定位变化。",
+        "ops_impact_en": "Main impact is on expansion signals, channel partnerships, hiring, and positioning changes.",
+    },
+    "Agora Microfinance": {
+        "positioning_cn": "农村与低收入微贷",
+        "positioning_en": "Rural and low-income microfinance",
+        "product_lane_cn": "农村金融 / 低收入客群微贷",
+        "product_lane_en": "Rural finance and low-income microfinance",
+        "target_segment_cn": "农村、低收入和微型经营者",
+        "target_segment_en": "Rural, low-income, and microenterprise borrowers",
+        "channel_model_cn": "网点/代理/社会影响披露",
+        "channel_model_en": "Branch/agent and social-impact disclosure model",
+        "ops_impact_cn": "重点影响社会影响口径、线下触达、客户教育和非 app-first 替代方案。",
+        "ops_impact_en": "Main impact is on social-impact framing, offline reach, customer education, and non-app-first alternatives.",
+    },
+    "Bayport Zambia": {
+        "positioning_cn": "区域集团型薪资贷",
+        "positioning_en": "Regional group-backed payroll lender",
+        "product_lane_cn": "薪资贷 / 集团披露",
+        "product_lane_en": "Payroll lending and group disclosure",
+        "target_segment_cn": "工薪与可扣款客群",
+        "target_segment_en": "Salary and deduction-capable borrowers",
+        "channel_model_cn": "官网 / 集团披露 / 许可证线索",
+        "channel_model_en": "Website, group disclosure, and licensing clues",
+        "ops_impact_cn": "重点影响财报披露、许可监管、工资扣款、投诉与集团风险偏好。",
+        "ops_impact_en": "Main impact is on financial disclosure, licensing, payroll deduction, complaints, and group risk appetite.",
+    },
+    "FINCA Zambia": {
+        "positioning_cn": "金融包容型微贷",
+        "positioning_en": "Financial-inclusion microfinance",
+        "product_lane_cn": "微贷 / 金融包容 / 社会影响",
+        "product_lane_en": "Microfinance, financial inclusion, and social impact",
+        "target_segment_cn": "低收入、小微经营和包容金融客群",
+        "target_segment_en": "Low-income, microenterprise, and inclusion segments",
+        "channel_model_cn": "官网 / 集团披露 / 线下服务",
+        "channel_model_en": "Website, group disclosure, and offline service",
+        "ops_impact_cn": "重点影响数字化入口、社会影响叙事、客户保护和线下服务质量。",
+        "ops_impact_en": "Main impact is on digital entry, social-impact narrative, customer protection, and offline service quality.",
+    },
+    "VisionFund Zambia": {
+        "positioning_cn": "社会影响型小微金融",
+        "positioning_en": "Impact-oriented microfinance",
+        "product_lane_cn": "小微企业 / 农业 / 社会影响金融",
+        "product_lane_en": "Microenterprise, agriculture, and impact finance",
+        "target_segment_cn": "小微企业、农业和脆弱客群",
+        "target_segment_en": "Microenterprise, agriculture, and vulnerable segments",
+        "channel_model_cn": "官网 / 线下网络 / 影响披露",
+        "channel_model_en": "Website, offline network, and impact disclosure",
+        "ops_impact_cn": "重点作为非 app-first 替代方案，观察客户教育、还款节奏和社会影响指标。",
+        "ops_impact_en": "Useful non-app-first alternative for customer education, repayment rhythm, and impact metrics.",
+    },
+    "LOLC Finance Zambia": {
+        "positioning_cn": "消费/资产/微型金融集团型玩家",
+        "positioning_en": "Consumer, asset, and microfinance-group player",
+        "product_lane_cn": "消费金融 / 分期 / 资产金融",
+        "product_lane_en": "Consumer finance, installment, and asset finance",
+        "target_segment_cn": "消费、资产融资和小微客户",
+        "target_segment_en": "Consumer, asset-finance, and SME-like borrowers",
+        "channel_model_cn": "官网 / 区域集团披露 / 线下服务",
+        "channel_model_en": "Website, regional group disclosure, and offline service",
+        "ops_impact_cn": "重点影响分期结构、资产金融、监管披露和产品线扩张。",
+        "ops_impact_en": "Main impact is on installment structure, asset finance, regulatory disclosure, and product-line expansion.",
+    },
+    "MFinance": {
+        "positioning_cn": "微贷数字入口候选",
+        "positioning_en": "Microfinance digital-entry candidate",
+        "product_lane_cn": "微贷 / 线上申请入口候选",
+        "product_lane_en": "Microfinance and online-application candidate",
+        "target_segment_cn": "个人和小微候选客群",
+        "target_segment_en": "Personal and microenterprise candidate segments",
+        "channel_model_cn": "官网 / 数字入口 / 客服线索",
+        "channel_model_en": "Website, digital entry, and support clues",
+        "ops_impact_cn": "重点影响线上申请、客服入口、费用披露和渠道组合验证。",
+        "ops_impact_en": "Main impact is on online application, support routes, fee disclosure, and channel-mix validation.",
+    },
+    "Airtel Money Zambia": {
+        "positioning_cn": "放还款支付轨道",
+        "positioning_en": "Payout and repayment payment rail",
+        "product_lane_cn": "移动钱包 / 交易失败 / 代理网络",
+        "product_lane_en": "Mobile wallet, failed transactions, and agent network",
+        "target_segment_cn": "贷款机构与借款人的资金通道",
+        "target_segment_en": "Funding rail for lenders and borrowers",
+        "channel_model_cn": "Mobile money / 代理 / 客服",
+        "channel_model_en": "Mobile money, agents, and support",
+        "ops_impact_cn": "不一定是贷款竞品，但直接影响放款到账、还款入账、退款和对账体验。",
+        "ops_impact_en": "Not necessarily a lender competitor, but directly affects payout posting, repayment posting, refunds, and reconciliation.",
+    },
+    "MTN MoMo Zambia": {
+        "positioning_cn": "放还款支付轨道",
+        "positioning_en": "Payout and repayment payment rail",
+        "product_lane_cn": "移动钱包 / 金融服务生态",
+        "product_lane_en": "Mobile wallet and financial-services ecosystem",
+        "target_segment_cn": "贷款机构与借款人的资金通道",
+        "target_segment_en": "Funding rail for lenders and borrowers",
+        "channel_model_cn": "MoMo / 代理 / 合作入口",
+        "channel_model_en": "MoMo, agents, and partnership entry",
+        "ops_impact_cn": "重点影响放款、还款、失败交易、客户解释和合作渠道策略。",
+        "ops_impact_en": "Main impact is on payout, repayment, failed transactions, customer explanations, and channel strategy.",
+    },
+    "JUMO": {
+        "positioning_cn": "信贷基础设施/生态伙伴",
+        "positioning_en": "Credit infrastructure / ecosystem partner",
+        "product_lane_cn": "合作式数字信贷基础设施",
+        "product_lane_en": "Partnership-based digital-credit infrastructure",
+        "target_segment_cn": "金融机构、钱包和终端借款人生态",
+        "target_segment_en": "Financial institutions, wallets, and end-borrower ecosystems",
+        "channel_model_cn": "合作伙伴 / 平台 / 数据与风控能力",
+        "channel_model_en": "Partners, platform, data and risk capabilities",
+        "ops_impact_cn": "重点影响合作伙伴扩张、风控能力、产品嵌入和公司层面披露。",
+        "ops_impact_en": "Main impact is on partner expansion, risk capability, embedded products, and company-level disclosure.",
+    },
+}
+
+
+POSITIONING_GROUP_BY_INSTITUTION: dict[str, tuple[str, str]] = {
+    "FLoan": ("App-first 小额现金贷", "App-first microcash lenders"),
+    "PowerKwacha": ("App-first 小额现金贷", "App-first microcash lenders"),
+    "SuperKwacha": ("App-first 小额现金贷", "App-first microcash lenders"),
+    "FairMoney Zambia": ("App-first 小额现金贷", "App-first microcash lenders"),
+    "Lupiya": ("多产品数字/综合信贷", "Multi-product digital or hybrid lenders"),
+    "PremierCredit": ("多产品数字/综合信贷", "Multi-product digital or hybrid lenders"),
+    "Finedge / ka Something": ("多通道数字入口", "Multichannel digital-entry lenders"),
+    "MFinance": ("多通道数字入口", "Multichannel digital-entry lenders"),
+    "Phindu Credit": ("薪资/收入客群贷款", "Salary or income-linked lenders"),
+    "Bayport Zambia": ("薪资/收入客群贷款", "Salary or income-linked lenders"),
+    "Micro Finance Zambia": ("薪资/收入客群贷款", "Salary or income-linked lenders"),
+    "Agora Microfinance": ("金融包容/社会影响微贷", "Financial-inclusion and impact microfinance"),
+    "FINCA Zambia": ("金融包容/社会影响微贷", "Financial-inclusion and impact microfinance"),
+    "VisionFund Zambia": ("金融包容/社会影响微贷", "Financial-inclusion and impact microfinance"),
+    "LOLC Finance Zambia": ("消费/资产/分期金融", "Consumer, asset, and installment finance"),
+    "SmartFin": ("公司动态/数字信用候选", "Company-signal and digital-credit candidates"),
+    "Airtel Money Zambia": ("支付轨道/钱包生态", "Payment rails and wallet ecosystem"),
+    "MTN MoMo Zambia": ("支付轨道/钱包生态", "Payment rails and wallet ecosystem"),
+    "JUMO": ("信贷基础设施/生态伙伴", "Credit infrastructure and ecosystem partners"),
+}
+
+
+def _unique_join(values: Iterable[object], limit: int = 3) -> str:
+    seen: list[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if text and text not in seen:
+            seen.append(text)
+    return " / ".join(seen[:limit])
+
+
+def _product_rows_by_institution(product_rows: Iterable[dict[str, object]] | None) -> dict[str, list[dict[str, object]]]:
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for row in product_rows or []:
+        institution = str(row.get("institution", "")).strip()
+        if institution:
+            grouped.setdefault(institution, []).append(row)
+    return grouped
+
+
+def build_competitor_comparison_rows(product_rows: Iterable[dict[str, object]] | None = None) -> list[dict[str, object]]:
+    """Return an all-target positioning and product matrix for concise comparison.
+
+    Reviewed product rows override the provisional lane where possible; candidates
+    remain explicitly marked as source hypotheses that need manual source review.
+    """
+
+    grouped_products = _product_rows_by_institution(product_rows)
+    rows: list[dict[str, object]] = []
+    for universe_row in build_competitor_overview_rows(product_rows):
+        institution = str(universe_row.get("institution", ""))
+        product_items = grouped_products.get(institution, [])
+        base = POSITIONING_BY_INSTITUTION.get(institution, {})
+        product_count = int(universe_row.get("product_matrix_rows", 0) or 0)
+        if product_items:
+            positioning_cn = _unique_join(item.get("competitor_positioning_cn") for item in product_items) or base.get("positioning_cn", "")
+            positioning_en = _unique_join(item.get("competitor_positioning_en") for item in product_items) or base.get("positioning_en", "")
+            product_lane_cn = _unique_join(item.get("product_layer_cn") for item in product_items) or base.get("product_lane_cn", "")
+            product_lane_en = _unique_join(item.get("product_layer_en") for item in product_items) or base.get("product_lane_en", "")
+            target_segment_cn = _unique_join(item.get("segment_cn") for item in product_items) or base.get("target_segment_cn", "")
+            target_segment_en = _unique_join(item.get("segment_en") for item in product_items) or base.get("target_segment_en", "")
+            channel_model_cn = _unique_join(item.get("payment_maturity_cn") for item in product_items) or base.get("channel_model_cn", "")
+            channel_model_en = _unique_join(item.get("payment_maturity_en") for item in product_items) or base.get("channel_model_en", "")
+            ops_impact_cn = _unique_join(item.get("operating_risk_focus_cn") for item in product_items) or base.get("ops_impact_cn", "")
+            ops_impact_en = _unique_join(item.get("operating_risk_focus_en") for item in product_items) or base.get("ops_impact_en", "")
+            evidence_mode_cn = f"已复核产品字段：{product_count} 条"
+            evidence_mode_en = f"Reviewed product fields: {product_count} row(s)"
+            matrix_status_cn = "已进入产品矩阵"
+            matrix_status_en = "In product matrix"
+        else:
+            positioning_cn = base.get("positioning_cn", str(universe_row.get("tier_cn", "")))
+            positioning_en = base.get("positioning_en", str(universe_row.get("tier_en", "")))
+            product_lane_cn = base.get("product_lane_cn", str(universe_row.get("product_focus_cn", "")))
+            product_lane_en = base.get("product_lane_en", str(universe_row.get("product_focus_en", "")))
+            target_segment_cn = base.get("target_segment_cn", "待回源确认客群")
+            target_segment_en = base.get("target_segment_en", "Segment needs source review")
+            channel_model_cn = base.get("channel_model_cn", "待回源确认渠道")
+            channel_model_en = base.get("channel_model_en", "Channel model needs source review")
+            ops_impact_cn = base.get("ops_impact_cn", str(universe_row.get("watch_summary_cn", "")))
+            ops_impact_en = base.get("ops_impact_en", str(universe_row.get("watch_summary_en", "")))
+            evidence_mode_cn = "候选定位：待回源"
+            evidence_mode_en = "Provisional positioning: source review needed"
+            matrix_status_cn = "未入已复核产品矩阵"
+            matrix_status_en = "Not in reviewed product matrix"
+
+        rows.append(
+            {
+                "institution": institution,
+                "tier_key": universe_row.get("tier_key", ""),
+                "tier_cn": universe_row.get("tier_cn", ""),
+                "tier_en": universe_row.get("tier_en", ""),
+                "positioning_group_cn": POSITIONING_GROUP_BY_INSTITUTION.get(
+                    institution,
+                    (str(universe_row.get("tier_cn", "")), str(universe_row.get("tier_en", ""))),
+                )[0],
+                "positioning_group_en": POSITIONING_GROUP_BY_INSTITUTION.get(
+                    institution,
+                    (str(universe_row.get("tier_cn", "")), str(universe_row.get("tier_en", ""))),
+                )[1],
+                "watch_priority_cn": universe_row.get("watch_priority_cn", ""),
+                "watch_priority_en": universe_row.get("watch_priority_en", ""),
+                "positioning_cn": positioning_cn,
+                "positioning_en": positioning_en,
+                "product_lane_cn": product_lane_cn,
+                "product_lane_en": product_lane_en,
+                "target_segment_cn": target_segment_cn,
+                "target_segment_en": target_segment_en,
+                "channel_model_cn": channel_model_cn,
+                "channel_model_en": channel_model_en,
+                "ops_impact_cn": ops_impact_cn,
+                "ops_impact_en": ops_impact_en,
+                "evidence_mode_cn": evidence_mode_cn,
+                "evidence_mode_en": evidence_mode_en,
+                "matrix_status_cn": matrix_status_cn,
+                "matrix_status_en": matrix_status_en,
+                "product_matrix_rows": product_count,
+                "policy_pressure_count": universe_row.get("policy_pressure_count", 0),
+                "source_links": universe_row.get("source_links", ""),
+            }
+        )
+    return rows
+
+
+def build_positioning_group_rows(
+    comparison_rows: Iterable[dict[str, object]] | None = None,
+) -> list[dict[str, object]]:
+    rows = list(comparison_rows or build_competitor_comparison_rows())
+    grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
+    for row in rows:
+        key = (str(row.get("positioning_group_cn", "")), str(row.get("positioning_group_en", "")))
+        grouped.setdefault(key, []).append(row)
+
+    output: list[dict[str, object]] = []
+    for (positioning_group_cn, positioning_group_en), items in grouped.items():
+        institutions = ", ".join(str(item.get("institution", "")) for item in items)
+        reviewed_count = sum(1 for item in items if int(item.get("product_matrix_rows", 0) or 0) > 0)
+        candidate_count = len(items) - reviewed_count
+        lanes_cn = _unique_join((item.get("product_lane_cn") for item in items), limit=4)
+        lanes_en = _unique_join((item.get("product_lane_en") for item in items), limit=4)
+        output.append(
+            {
+                "positioning_cn": positioning_group_cn,
+                "positioning_en": positioning_group_en,
+                "institutions": institutions,
+                "target_count": len(items),
+                "reviewed_count": reviewed_count,
+                "candidate_count": candidate_count,
+                "product_lanes_cn": lanes_cn,
+                "product_lanes_en": lanes_en,
+                "business_read_cn": "这一组用于判断同类玩家的客群、渠道和运营风险是否可横向比较；候选项需要先补来源证据。",
+                "business_read_en": "Use this group to compare similar players by segment, channel, and operating risk; candidate targets need source evidence first.",
+            }
+        )
+    return sorted(output, key=lambda item: (-int(item["target_count"]), str(item["positioning_en"])))
+
+
 def build_competitor_overview_rows(product_rows: Iterable[dict[str, object]] | None = None) -> list[dict[str, object]]:
     """Return one concise matrix row per competitor or ecosystem candidate."""
 
@@ -666,7 +1055,9 @@ def build_watch_panel_rows(product_rows: Iterable[dict[str, object]] | None = No
     """Return compact visual cards for competitor observation panels."""
 
     rows = []
+    comparison_by_name = {str(row.get("institution", "")): row for row in build_competitor_comparison_rows(product_rows)}
     for row in build_competitor_overview_rows(product_rows):
+        comparison = comparison_by_name.get(str(row["institution"]), {})
         rows.append(
             {
                 "institution": row["institution"],
@@ -681,6 +1072,14 @@ def build_watch_panel_rows(product_rows: Iterable[dict[str, object]] | None = No
                 "matrix_status_en": row["matrix_status_en"],
                 "watch_summary_cn": row["watch_summary_cn"],
                 "watch_summary_en": row["watch_summary_en"],
+                "positioning_cn": comparison.get("positioning_cn", ""),
+                "positioning_en": comparison.get("positioning_en", ""),
+                "product_lane_cn": comparison.get("product_lane_cn", ""),
+                "product_lane_en": comparison.get("product_lane_en", ""),
+                "target_segment_cn": comparison.get("target_segment_cn", ""),
+                "target_segment_en": comparison.get("target_segment_en", ""),
+                "ops_impact_cn": comparison.get("ops_impact_cn", ""),
+                "ops_impact_en": comparison.get("ops_impact_en", ""),
                 "policy_pressure_count": row["policy_pressure_count"],
                 "product_matrix_rows": row["product_matrix_rows"],
                 "next_step_cn": row["next_step_cn"],

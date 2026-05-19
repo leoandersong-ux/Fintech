@@ -1,10 +1,12 @@
 import unittest
 
 from lending_ops_radar.competitor_intelligence import (
+    build_competitor_comparison_rows,
     build_competitor_event_rows,
     build_competitor_overview_rows,
     build_competitor_universe,
     build_policy_impact_rows,
+    build_positioning_group_rows,
     build_watch_panel_rows,
 )
 
@@ -66,6 +68,47 @@ class CompetitorIntelligenceTests(unittest.TestCase):
         self.assertIn("Airtel Money Zambia", names)
         self.assertTrue(all(row["watch_summary_cn"] for row in rows))
         self.assertTrue(all(len(str(row["watch_summary_cn"])) < 90 for row in rows))
+
+    def test_comparison_matrix_includes_all_targets_with_positioning(self) -> None:
+        product_rows = [
+            {
+                "institution": "FLoan",
+                "product_or_signal": "Microloan app",
+                "competitor_positioning_en": "App-first microcash lender",
+                "product_layer_en": "Short-term microcredit",
+                "segment_en": "Personal borrowers",
+                "payment_maturity_en": "Explicit mobile-money or bank rail",
+                "operating_risk_focus_en": "fee and total-cost disclosure",
+            }
+        ]
+        rows = build_competitor_comparison_rows(product_rows)
+        by_name = {row["institution"]: row for row in rows}
+
+        self.assertEqual(len(rows), len(build_competitor_universe()))
+        self.assertEqual(by_name["FLoan"]["product_matrix_rows"], 1)
+        self.assertIn("Reviewed product fields", by_name["FLoan"]["evidence_mode_en"])
+        self.assertIn("Provisional positioning", by_name["SuperKwacha"]["evidence_mode_en"])
+        self.assertTrue(by_name["Bayport Zambia"]["positioning_en"])
+        self.assertTrue(by_name["Airtel Money Zambia"]["ops_impact_en"])
+        self.assertEqual(by_name["FLoan"]["positioning_group_en"], "App-first microcash lenders")
+
+    def test_positioning_groups_summarize_reviewed_and_candidate_counts(self) -> None:
+        rows = build_competitor_comparison_rows(
+            [
+                {
+                    "institution": "FLoan",
+                    "competitor_positioning_en": "App-first microcash lender",
+                    "product_layer_en": "Short-term microcredit",
+                }
+            ]
+        )
+        groups = build_positioning_group_rows(rows)
+
+        self.assertTrue(groups)
+        self.assertGreaterEqual(sum(row["target_count"] for row in groups), len(build_competitor_universe()))
+        self.assertLess(len(groups), len(build_competitor_universe()))
+        self.assertTrue(any(row["reviewed_count"] > 0 for row in groups))
+        self.assertTrue(all(row["business_read_en"] for row in groups))
 
 
 if __name__ == "__main__":

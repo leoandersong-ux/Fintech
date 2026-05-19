@@ -35,8 +35,9 @@ If the app was created with Python 3.14 and fails while building `pyarrow`, dele
 
 ## Current Node
 
-- Version notes: [v0.8.1 Competitor Matrix and Watch Visual Layer](./VERSION_NOTES_2026-05-19_v0.8.1.md)
-- Previous node: [v0.8 Competitor Scope and Policy Impact Layer](./VERSION_NOTES_2026-05-19_v0.8.md)
+- Version notes: [v0.8.2 All-Target Competitor Positioning Matrix](./VERSION_NOTES_2026-05-19_v0.8.2.md)
+- Previous node: [v0.8.1 Competitor Matrix and Watch Visual Layer](./VERSION_NOTES_2026-05-19_v0.8.1.md)
+- Earlier node: [v0.8 Competitor Scope and Policy Impact Layer](./VERSION_NOTES_2026-05-19_v0.8.md)
 - Earlier node: [v0.7 Research Brief Readability Layer](./VERSION_NOTES_2026-05-19_v0.7.md)
 - Earlier node: [v0.6 Market Voice and Trend Layer](./VERSION_NOTES_2026-05-19_v0.6.md)
 - Earlier node: [v0.5 Business Interpretation Layer](./VERSION_NOTES_2026-05-11_v0.5.md)
