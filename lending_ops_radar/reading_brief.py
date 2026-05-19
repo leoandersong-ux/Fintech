@@ -47,7 +47,16 @@ def _counts(snapshot: dict[str, Any]) -> dict[str, int]:
     if not isinstance(raw_counts, dict):
         raw_counts = {}
     result: dict[str, int] = {}
-    for key in ("signals", "reviewed", "new", "market_questions", "competitor_matrix_rows"):
+    for key in (
+        "signals",
+        "reviewed",
+        "new",
+        "market_questions",
+        "competitor_matrix_rows",
+        "competitor_universe_rows",
+        "policy_impact_rows",
+        "competitor_event_rows",
+    ):
         try:
             result[key] = int(raw_counts.get(key, 0))
         except (TypeError, ValueError):

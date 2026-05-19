@@ -25,6 +25,12 @@ from lending_ops_radar.brief_generator import (
     load_source_health,
     render_brief,
 )
+from lending_ops_radar.competitor_intelligence import (
+    build_competitor_event_rows,
+    build_competitor_universe,
+    build_policy_impact_rows,
+    grouped_competitor_counts,
+)
 from lending_ops_radar.intelligence import (
     assessment_table_rows,
     build_assessments,
@@ -154,6 +160,59 @@ APP_CSS = """
         border-radius: 0 8px 8px 0;
         padding: 0.68rem 0.85rem;
         margin-bottom: 0.55rem;
+    }
+    .landscape-hero {
+        background: #f7fbf8;
+        border: 1px solid #d8e5dc;
+        border-radius: 8px;
+        padding: 1rem 1.1rem;
+        margin: 0.4rem 0 1rem 0;
+    }
+    .tier-card {
+        background: #ffffff;
+        border: 1px solid #dce4df;
+        border-radius: 8px;
+        padding: 0.88rem 0.95rem;
+        min-height: 225px;
+        margin-bottom: 0.75rem;
+    }
+    .tier-pill {
+        display: inline-block;
+        background: #eaf2ed;
+        color: #153a32;
+        border-radius: 999px;
+        padding: 0.16rem 0.55rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-bottom: 0.45rem;
+    }
+    .event-card {
+        border-left: 4px solid #2f6f61;
+        background: #ffffff;
+        border-radius: 0 8px 8px 0;
+        border-top: 1px solid #dce4df;
+        border-right: 1px solid #dce4df;
+        border-bottom: 1px solid #dce4df;
+        padding: 0.78rem 0.92rem;
+        margin-bottom: 0.65rem;
+    }
+    .policy-card {
+        background: #fffaf6;
+        border: 1px solid #ecd6c8;
+        border-radius: 8px;
+        padding: 0.9rem 1rem;
+        min-height: 250px;
+        margin-bottom: 0.75rem;
+    }
+    .field-chip {
+        display: inline-block;
+        border: 1px solid #cfd9d4;
+        background: #fbfcfb;
+        border-radius: 999px;
+        padding: 0.12rem 0.5rem;
+        margin: 0.12rem 0.15rem 0.12rem 0;
+        font-size: 0.78rem;
+        color: #47564f;
     }
     .compact-divider {
         border-top: 1px solid #e1e7e3;
@@ -581,6 +640,17 @@ def public_app_listing_candidates() -> list[dict[str, object]]:
                 }
             )
     return candidates
+
+
+def expanded_watchlist_candidates() -> list[dict[str, object]]:
+    watchlist_path = Path(__file__).with_name("watchlist.competitors.expanded.json")
+    if not watchlist_path.exists():
+        return []
+    try:
+        sources = json.loads(watchlist_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    return [item for item in sources if isinstance(item, dict)]
 
 
 def localized_value(row: dict[str, object] | pd.Series, base: str) -> str:
@@ -1233,6 +1303,146 @@ def render_weekly_actions(conn: sqlite3.Connection) -> None:
 
     with st.expander(title_pair("完整行动表", "Full Action Table")):
         display_df(pd.DataFrame(rows))
+
+
+def _chips_from_csv(value: object) -> str:
+    chips = []
+    for item in str(value or "").split(","):
+        item = item.strip()
+        if item:
+            chips.append(f'<span class="field-chip">{safe_html(item)}</span>')
+    return " ".join(chips)
+
+
+def render_competitor_landscape() -> None:
+    snapshot = load_dashboard_snapshot()
+    universe = snapshot_list(snapshot, "competitor_universe") or build_competitor_universe()
+    policy_rows = snapshot_list(snapshot, "policy_impact_rows") or build_policy_impact_rows()
+    event_rows = snapshot_list(snapshot, "competitor_event_rows") or build_competitor_event_rows()
+    expanded_sources = expanded_watchlist_candidates()
+    counts = grouped_competitor_counts(universe)
+
+    section_header(
+        "竞品地图与政策冲击",
+        "Competitor Map and Policy Impact",
+        "这一页按研究问题重排：先看市场里有哪些玩家，再看政策会压到哪些字段，最后看公司、产品、财报/社会和舆论层面的事件入口。",
+        "This view is organized by research question: who is in the market, which competitor fields policy can pressure, and which company/product/financial/social/voice events to monitor.",
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric(title_pair("竞品/生态候选", "Competitor / Ecosystem Candidates"), len(universe))
+    col2.metric(title_pair("核心数字贷款", "Core Digital Lenders"), counts.get("core_digital_lending", 0))
+    col3.metric(title_pair("相邻微贷/薪资贷", "Adjacent MFIs / Payroll"), counts.get("adjacent_microfinance_payroll", 0))
+    col4.metric(title_pair("政策影响主题", "Policy Impact Themes"), len(policy_rows))
+
+    st.markdown(
+        f"""
+        <div class="landscape-hero">
+            <strong>{title_pair("阅读方式", "How to read this")}</strong><br>
+            {ui_text(
+                "不要把所有玩家放在同一张表里硬比较。先区分 App-first 小额贷款、传统/薪资/微贷机构、支付轨道和生态伙伴，再看每类玩家受费用披露、数据隐私、投诉处理、支付失败和公司层变化的影响。",
+                "Do not force every player into one flat comparison table. Separate app-first lenders, traditional/payroll/MFI players, payment rails, and ecosystem partners, then read how fee disclosure, privacy, complaints, failed payments, and company-level changes affect each group."
+            )}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(f"#### {title_pair('竞品覆盖地图', 'Competitor Coverage Map')}")
+    tiers = [
+        ("core_digital_lending", title_pair("核心数字贷款 App", "Core Digital Lending Apps")),
+        ("adjacent_microfinance_payroll", title_pair("相邻微贷/薪资贷", "Adjacent MFIs / Payroll Lenders")),
+        ("rails_ecosystem", title_pair("支付轨道/生态伙伴", "Payment Rails / Ecosystem")),
+    ]
+    for tier_key, tier_title in tiers:
+        tier_rows = [row for row in universe if row.get("tier_key") == tier_key]
+        if not tier_rows:
+            continue
+        st.markdown(f"##### {tier_title}")
+        columns = st.columns(3)
+        for index, row in enumerate(tier_rows):
+            with columns[index % 3]:
+                source_links = str(row.get("source_links", ""))
+                first_link = source_links.split(" ; ")[0] if source_links else ""
+                source_html = (
+                    f'<a href="{safe_html(first_link)}" target="_blank">{title_pair("来源候选", "Source candidate")}</a>'
+                    if first_link
+                    else ""
+                )
+                st.markdown(
+                    f"""
+                    <div class="tier-card">
+                        <span class="tier-pill">{safe_html(localized_value(row, "watch_priority"))}</span><br>
+                        <strong>{safe_html(row.get("institution", ""))}</strong>
+                        <div class="brief-meta">{safe_html(localized_value(row, "tier"))}</div>
+                        <div class="compact-divider"></div>
+                        {safe_html(localized_value(row, "product_focus"))}<br><br>
+                        <strong>{title_pair("观察重点", "Watch")}</strong><br>
+                        {safe_html(localized_value(row, "primary_signals"))}<br>
+                        <div class="brief-meta">{safe_html(localized_value(row, "evidence_status"))} · {source_html}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+    st.markdown(f"#### {title_pair('政策对竞品字段的影响矩阵', 'Policy-to-Competitor Impact Matrix')}")
+    policy_columns = st.columns(2)
+    for index, row in enumerate(policy_rows):
+        with policy_columns[index % 2]:
+            st.markdown(
+                f"""
+                <div class="policy-card">
+                    <strong>{safe_html(localized_value(row, "policy_theme"))}</strong>
+                    <div class="brief-meta">
+                        {title_pair("受影响候选", "Affected candidates")}: {safe_html(row.get("affected_competitor_count", 0))}
+                        · {safe_html(row.get("examples", ""))}
+                    </div>
+                    <div class="compact-divider"></div>
+                    <strong>{title_pair("政策含义", "Policy Meaning")}</strong><br>
+                    {safe_html(localized_value(row, "impact"))}<br><br>
+                    <strong>{title_pair("观察字段", "Watch Fields")}</strong><br>
+                    {_chips_from_csv(row.get("watch_fields", ""))}<br><br>
+                    <strong>{title_pair("下一步", "Next")}</strong><br>
+                    {safe_html(localized_value(row, "next_action"))}
+                    <div class="brief-meta">{safe_html(localized_value(row, "source_anchor"))}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown(f"#### {title_pair('公司/产品/财报/社会/舆论事件流候选', 'Company, Product, Financial, Social, and Voice Event Candidates')}")
+    event_columns = st.columns(2)
+    for index, row in enumerate(event_rows):
+        with event_columns[index % 2]:
+            link = row.get("source_link", "")
+            source_html = (
+                f'<a href="{safe_html(link)}" target="_blank">{title_pair("来源", "Source")}</a>'
+                if link
+                else ""
+            )
+            st.markdown(
+                f"""
+                <div class="event-card">
+                    <span class="tier-pill">{safe_html(localized_value(row, "event_type"))}</span><br>
+                    <strong>{safe_html(row.get("institution", ""))}</strong><br>
+                    {safe_html(localized_value(row, "event"))}
+                    <div class="compact-divider"></div>
+                    <strong>{title_pair("业务解读", "Business Read")}</strong><br>
+                    {safe_html(localized_value(row, "business_read"))}
+                    <div class="brief-meta">{source_html}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    with st.expander(title_pair("扩展来源候选清单", "Expanded Source Candidate List")):
+        if expanded_sources:
+            display_df(pd.DataFrame(expanded_sources))
+        else:
+            st.info(ui_text("尚未创建扩展 watchlist 文件。", "No expanded watchlist file yet."))
+
+    with st.expander(title_pair("结构化竞品地图表", "Structured Competitor Map Table")):
+        display_df(pd.DataFrame(universe))
 
 
 def render_competitor_watch(conn: sqlite3.Connection) -> None:
@@ -2076,7 +2286,8 @@ def render_research_brief_home(conn: sqlite3.Connection) -> None:
     col1.metric(title_pair("公开信号", "Public Signals"), counts["signals"])
     col2.metric(title_pair("已复核", "Reviewed"), counts["reviewed"])
     col3.metric(title_pair("待复核", "New"), counts["new"])
-    col4.metric(title_pair("竞品矩阵", "Competitor Matrix"), counts["competitor_matrix_rows"])
+    competitor_scope = counts.get("competitor_universe_rows") or counts["competitor_matrix_rows"]
+    col4.metric(title_pair("竞品候选", "Competitor Scope"), competitor_scope)
     st.caption(f"{title_pair('快照生成', 'Snapshot Generated')}: {generated_at}")
 
     st.markdown(f"#### {title_pair('先读这几条', 'Read These First')}")
@@ -2198,16 +2409,19 @@ def main() -> None:
     with tabs[2]:
         market_tabs = st.tabs(
             [
+                title_pair("竞品地图与政策", "Competitor Map & Policy"),
                 title_pair("市场声音", "Market Voice"),
                 title_pair("竞品矩阵", "Competitor Matrix"),
                 title_pair("竞品观察", "Competitor Watch"),
             ]
         )
         with market_tabs[0]:
-            render_market_voice(conn)
+            render_competitor_landscape()
         with market_tabs[1]:
-            render_competitor_matrix(conn)
+            render_market_voice(conn)
         with market_tabs[2]:
+            render_competitor_matrix(conn)
+        with market_tabs[3]:
             render_competitor_watch(conn)
     with tabs[3]:
         review_tabs = st.tabs(

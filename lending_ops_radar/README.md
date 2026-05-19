@@ -124,6 +124,17 @@ View trend rows from CLI:
 - The snapshot JSON includes `reading_brief_zh` and `reading_brief_en` for cloud deployment.
 - A small unittest suite guards the brief model and obvious garbled text handling.
 
+## Competitor Scope and Policy Impact Layer
+
+`v0.8` expands the competitor-intelligence surface and reshapes the visual reading order:
+
+- `competitor_intelligence.py` adds a broader competitor universe beyond the first four lenders.
+- Competitors are grouped into `core digital lending`, `adjacent microfinance / payroll`, and `payment rails / ecosystem`.
+- Streamlit now opens the `市场竞品` section with a competitor map and policy-impact dashboard before showing raw matrices.
+- Policy signals are mapped into practical competitor watch fields such as fees, APR, privacy, app permissions, complaints, failed payments, support, company news, financial disclosure, social impact, hiring, and partnerships.
+- `watchlist.competitors.expanded.json` stores additional candidate public sources. Most are disabled by default until manually approved.
+- Public app listings and public-review surfaces remain theme-level candidates; do not store usernames, personal identity, or sensitive raw narratives.
+
 ## Guardrails
 
 - Public pages only.

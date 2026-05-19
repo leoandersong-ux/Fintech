@@ -16,6 +16,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from lending_ops_radar.brief_generator import load_market_questions, load_recent_notes, load_reviewed_signals
+from lending_ops_radar.competitor_intelligence import (
+    build_competitor_event_rows,
+    build_competitor_universe,
+    build_policy_impact_rows,
+)
 from lending_ops_radar.competitor_matrix import build_product_matrix
 from lending_ops_radar.intelligence import (
     assessment_table_rows,
@@ -102,6 +107,9 @@ def build_snapshot(conn: sqlite3.Connection) -> dict[str, Any]:
     quality_rows = build_quality_rows(reviewed)
     quality_counts = summary_counts(quality_rows)
     matrix_rows = build_product_matrix(conn)
+    competitor_universe = build_competitor_universe()
+    policy_impact = build_policy_impact_rows()
+    competitor_events = build_competitor_event_rows()
     source_rows = source_health_rows(conn)
     trend_items = trend_rows(conn)
     voice_items = market_voice_rows(conn, limit=40)
@@ -121,6 +129,9 @@ def build_snapshot(conn: sqlite3.Connection) -> dict[str, Any]:
             "market_questions": scalar(conn, "SELECT COUNT(*) FROM market_questions"),
             "source_runs": scalar(conn, "SELECT COUNT(*) FROM source_runs"),
             "competitor_matrix_rows": len(matrix_rows),
+            "competitor_universe_rows": len(competitor_universe),
+            "policy_impact_rows": len(policy_impact),
+            "competitor_event_rows": len(competitor_events),
         },
         "quality_summary": {
             "tier_counts": dict(quality_counts["tier"]),
@@ -140,6 +151,9 @@ def build_snapshot(conn: sqlite3.Connection) -> dict[str, Any]:
         "weekly_actions": action_items,
         "source_health": source_rows,
         "source_trends": source_trends,
+        "competitor_universe": competitor_universe,
+        "policy_impact_rows": policy_impact,
+        "competitor_event_rows": competitor_events,
         "competitor_matrix_top": matrix_rows[:20],
         "research_notes": [dict(row) for row in load_recent_notes(conn)],
         "market_questions": [dict(row) for row in load_market_questions(conn)],
