@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -33,6 +34,8 @@ from lending_ops_radar.intelligence import (
 from lending_ops_radar.competitor_matrix import build_product_matrix, render_matrix_markdown
 from lending_ops_radar.pipeline import DEFAULT_SOURCES, connect, init_db, load_sources, upsert_sources
 from lending_ops_radar.quality import build_quality_rows, summary_counts
+from lending_ops_radar.snapshot_exporter import DEFAULT_OUTPUT as DEFAULT_SNAPSHOT
+from lending_ops_radar.trends import market_voice_rows, source_trend_rows, trend_rows, weekly_action_rows
 from lending_ops_radar.version import APP_VERSION, APP_VERSION_LABEL
 
 
@@ -261,6 +264,34 @@ COLUMN_LABELS = {
     "why_en": "Why It Matters | EN",
     "next_action_cn": "下一步动作 | Next Action",
     "next_action_en": "Next Action | EN",
+    "theme_key": "主题ID | Theme ID",
+    "theme_cn": "主题 | Theme",
+    "theme_en": "Theme | EN",
+    "business_read_cn": "业务解读 | Business Read",
+    "business_read_en": "Business Read | EN",
+    "action_cn": "建议动作 | Action",
+    "action_en": "Action | EN",
+    "current_count": "本窗口 | Current",
+    "previous_count": "上一窗口 | Previous",
+    "delta": "变化 | Change",
+    "direction_cn": "方向 | Direction",
+    "direction_en": "Direction | EN",
+    "interpretation_cn": "趋势解读 | Trend Read",
+    "interpretation_en": "Trend Read | EN",
+    "window_days": "窗口天数 | Window Days",
+    "anchor_date": "锚定日期 | Anchor Date",
+    "action_area_cn": "行动领域 | Action Area",
+    "action_area_en": "Action Area | EN",
+    "trigger_cn": "触发依据 | Trigger",
+    "trigger_en": "Trigger | EN",
+    "recommended_action_cn": "建议动作 | Recommended Action",
+    "recommended_action_en": "Recommended Action | EN",
+    "owner_cn": "负责人 | Owner",
+    "owner_en": "Owner | EN",
+    "priority_score": "行动分 | Action Score",
+    "success_rate": "成功率 | Success Rate",
+    "status_cn": "状态 | Status",
+    "status_en": "Status | EN",
 }
 
 STATUS_LABELS = {
@@ -447,6 +478,62 @@ def display_df(df: pd.DataFrame, **kwargs: object) -> None:
     cleaned = readable_dataframe(df)
     cleaned = localize_dataframe_columns(cleaned)
     st.dataframe(cleaned.rename(columns=localized_label_map()), use_container_width=True, hide_index=True, **kwargs)
+
+
+def load_dashboard_snapshot() -> dict[str, object]:
+    if not DEFAULT_SNAPSHOT.exists():
+        return {}
+    try:
+        return json.loads(DEFAULT_SNAPSHOT.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def snapshot_list(snapshot: dict[str, object], key: str) -> list[dict[str, object]]:
+    value = snapshot.get(key)
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def public_app_listing_candidates() -> list[dict[str, object]]:
+    watchlist_path = Path(__file__).with_name("watchlist.competitors.json")
+    if not watchlist_path.exists():
+        return []
+    try:
+        sources = json.loads(watchlist_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    candidates: list[dict[str, object]] = []
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        source_type = str(source.get("source_type", "")).lower()
+        name = str(source.get("name", "")).lower()
+        if source_type == "public_app_listing" or "google play" in name:
+            candidates.append(
+                {
+                    "source_id": source.get("source_id", ""),
+                    "name": source.get("name", ""),
+                    "enabled": source.get("enabled", False),
+                    "category": source.get("category", ""),
+                    "url": source.get("url", ""),
+                    "compliance_notes": source.get("compliance_notes", ""),
+                }
+            )
+    return candidates
+
+
+def localized_value(row: dict[str, object] | pd.Series, base: str) -> str:
+    preferred = language_column(base)
+    fallback = f"{base}_cn" if preferred.endswith("_en") else f"{base}_en"
+    try:
+        value = row.get(preferred, "")  # type: ignore[attr-defined]
+        if not value:
+            value = row.get(fallback, "")  # type: ignore[attr-defined]
+    except Exception:
+        value = ""
+    return readable_text(value)
 
 
 def count_rows(conn: sqlite3.Connection, query: str, params: tuple = ()) -> int:
@@ -680,11 +767,14 @@ def render_deployment_health(conn: sqlite3.Connection) -> None:
     )
     db_size = round(DEFAULT_DB.stat().st_size / 1024 / 1024, 2) if DEFAULT_DB.exists() else 0
     latest_source = conn.execute("SELECT MAX(updated_at) FROM source_quality").fetchone()[0]
+    snapshot = load_dashboard_snapshot()
+    snapshot_generated = readable_text(snapshot.get("generated_at", "")) if snapshot else "N/A"
     col1, col2, col3, col4 = st.columns(4)
     col1.metric(title_pair("数据库", "Database"), f"{db_size} MB")
     col2.metric(title_pair("信号", "Signals"), count_rows(conn, "SELECT COUNT(*) FROM signals"))
     col3.metric(title_pair("已复核", "Reviewed"), count_rows(conn, "SELECT COUNT(*) FROM reviews WHERE review_status = 'reviewed'"))
-    col4.metric(title_pair("最近来源运行", "Last Source Run"), latest_source or "N/A")
+    col4.metric(title_pair("快照", "Snapshot"), ui_text("可用", "Available") if snapshot else ui_text("缺失", "Missing"))
+    st.caption(f"{title_pair('最近来源运行', 'Last Source Run')}: {latest_source or 'N/A'} · {title_pair('快照生成', 'Snapshot Generated')}: {snapshot_generated}")
 
     st.markdown(f"#### {title_pair('部署检查', 'Deployment Checks')}")
     display_df(pd.DataFrame(deployment_checks(conn)))
@@ -814,7 +904,7 @@ def render_business_intelligence(conn: sqlite3.Connection) -> None:
     col3.metric(title_pair("中潜在影响", "Medium Potential Impact"), medium_count)
     col4.metric(title_pair("影响域", "Impact Domains"), len(domains))
 
-    st.markdown(f"#### {title_pair('V0.5 五条迭代线行动板', 'V0.5 Five-Lane Action Board')}")
+    st.markdown(f"#### {title_pair('V0.6 五条迭代线行动板', 'V0.6 Five-Lane Action Board')}")
     lane_df = pd.DataFrame(lane_rows)
     if lane_df.empty:
         st.info(ui_text("暂无可用于行动板的解读信号。", "No interpreted signals available for the action board yet."))
@@ -921,6 +1011,165 @@ def render_business_intelligence(conn: sqlite3.Connection) -> None:
     st.markdown(f"#### {title_pair('情报覆盖缺口', 'Intelligence Coverage Gaps')}")
     gap_df = pd.DataFrame(gaps)
     display_df(gap_df[["area_cn", "coverage_cn", "gap_cn", "next_source_cn", "area_en", "coverage_en", "gap_en", "next_source_en"]])
+
+
+def render_market_voice(conn: sqlite3.Connection) -> None:
+    section_header(
+        "市场声音",
+        "Market Voice",
+        "把投诉、公开评论候选、竞品 App 层和客服/支付摩擦放在一个阅读面里，先看主题和业务含义，再回源。",
+        "Read complaints, public-review candidates, competitor app-layer signals, and support/payment friction by theme before going back to sources.",
+    )
+    rows = market_voice_rows(conn, limit=50)
+    snapshot = load_dashboard_snapshot()
+    if not rows:
+        rows = snapshot_list(snapshot, "market_voice")
+    candidates = public_app_listing_candidates()
+    enabled_candidates = [item for item in candidates if item.get("enabled")]
+    theme_count = len({str(row.get("theme_key", "")) for row in rows})
+    high_risk = sum(1 for row in rows if row.get("risk_level") == "high")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric(title_pair("市场声音信号", "Market Voice Signals"), len(rows))
+    col2.metric(title_pair("主题数", "Themes"), theme_count)
+    col3.metric(title_pair("高风险", "High Risk"), high_risk)
+    col4.metric(title_pair("App 候选源", "App Candidates"), f"{len(enabled_candidates)}/{len(candidates)}")
+
+    st.markdown(
+        f"""
+        <div class="section-note">
+        {ui_text("Google Play / public app listing 仍按候选源处理：默认不启用，只有在确认只读取公开页面、不过度采集评论身份信息后再进入自动化。", "Google Play / public app listings remain candidate sources: disabled by default until public-page boundaries and review-identity minimization are confirmed.")}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if not rows:
+        st.info(ui_text("暂无市场声音数据。", "No market-voice rows yet."))
+        return
+
+    st.markdown(f"#### {title_pair('主题卡片', 'Theme Cards')}")
+    for index, row in enumerate(rows[:8], start=1):
+        with st.container(border=True):
+            st.markdown(f"**{index}. {localized_value(row, 'theme')}**")
+            st.caption(
+                f"{readable_text(row.get('source_name', ''))} · {readable_text(row.get('classification', ''))} · {readable_text(row.get('risk_level', ''))}"
+            )
+            st.markdown(f"**{title_pair('信号', 'Signal')}:** {readable_text(row.get('signal', ''))}")
+            st.markdown(f"**{title_pair('业务解读', 'Business Read')}:** {localized_value(row, 'business_read')}")
+            st.markdown(f"**{title_pair('建议动作', 'Action')}:** {localized_value(row, 'action')}")
+            source_link = readable_text(row.get("source_link", ""))
+            if source_link:
+                st.markdown(f"[{title_pair('来源', 'Source')}]({source_link})")
+
+    with st.expander(title_pair("公开 App Listing 候选源", "Public App Listing Candidates")):
+        display_df(pd.DataFrame(candidates))
+    with st.expander(title_pair("完整市场声音表", "Full Market Voice Table")):
+        display_df(
+            pd.DataFrame(rows)[
+                [
+                    "signal_id",
+                    "theme_cn",
+                    "theme_en",
+                    "source_name",
+                    "signal",
+                    "classification",
+                    "risk_level",
+                    "review_status",
+                    "business_read_cn",
+                    "business_read_en",
+                    "action_cn",
+                    "action_en",
+                    "source_link",
+                ]
+            ]
+        )
+
+
+def render_trend_changes(conn: sqlite3.Connection) -> None:
+    section_header(
+        "趋势变化",
+        "Trend Changes",
+        "用最近一个数据窗口和上一个窗口做轻量比较，帮助判断哪些主题在变多、哪些来源需要处理。",
+        "Compare the latest data window with the previous one to see which themes are rising and which sources need attention.",
+    )
+    rows = trend_rows(conn)
+    source_rows = source_trend_rows(conn)
+    snapshot = load_dashboard_snapshot()
+    if not rows:
+        rows = snapshot_list(snapshot, "trend_rows")
+    if not source_rows:
+        source_rows = snapshot_list(snapshot, "source_trends")
+
+    rising = sum(1 for row in rows if int(row.get("delta", 0)) > 0)
+    falling = sum(1 for row in rows if int(row.get("delta", 0)) < 0)
+    needs_attention = sum(1 for row in source_rows if row.get("status_cn") == "需要处理" or row.get("status_en") == "Needs attention")
+    anchor = rows[0].get("anchor_date", "N/A") if rows else "N/A"
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric(title_pair("趋势主题", "Trend Themes"), len(rows))
+    col2.metric(title_pair("上升主题", "Rising Themes"), rising)
+    col3.metric(title_pair("下降主题", "Falling Themes"), falling)
+    col4.metric(title_pair("需处理来源", "Sources Needing Attention"), needs_attention)
+    st.caption(f"{title_pair('趋势锚定日期', 'Trend Anchor Date')}: {anchor}")
+
+    if not rows:
+        st.info(ui_text("暂无趋势数据。", "No trend data yet."))
+        return
+
+    chart_df = pd.DataFrame(rows)[["theme_cn", "theme_en", "current_count", "previous_count"]].copy()
+    chart_df["theme"] = chart_df[language_column("theme")]
+    st.bar_chart(chart_df.set_index("theme")[["previous_count", "current_count"]])
+
+    st.markdown(f"#### {title_pair('趋势解读', 'Trend Reads')}")
+    for row in rows[:8]:
+        with st.container(border=True):
+            st.markdown(f"**{localized_value(row, 'theme')}**")
+            st.caption(
+                f"{title_pair('本窗口', 'Current')}: {row.get('current_count', 0)} · "
+                f"{title_pair('上一窗口', 'Previous')}: {row.get('previous_count', 0)} · "
+                f"{title_pair('变化', 'Change')}: {int(row.get('delta', 0)):+d}"
+            )
+            st.markdown(f"**{title_pair('判断', 'Read')}:** {localized_value(row, 'interpretation')}")
+            st.markdown(f"**{title_pair('动作', 'Action')}:** {localized_value(row, 'action')}")
+
+    with st.expander(title_pair("来源健康趋势", "Source Health Trends")):
+        display_df(pd.DataFrame(source_rows))
+    with st.expander(title_pair("完整趋势表", "Full Trend Table")):
+        display_df(pd.DataFrame(rows))
+
+
+def render_weekly_actions(conn: sqlite3.Connection) -> None:
+    section_header(
+        "本周行动",
+        "Weekly Actions",
+        "把趋势和市场声音压缩成个人研究动作清单，避免周报只停留在信息摘要。",
+        "Compress trends and market voice into personal research actions so weekly notes do not stop at summaries.",
+    )
+    rows = weekly_action_rows(conn, limit=8)
+    snapshot = load_dashboard_snapshot()
+    if not rows:
+        rows = snapshot_list(snapshot, "weekly_actions")
+    if not rows:
+        st.info(ui_text("暂无本周行动建议。", "No weekly actions yet."))
+        return
+
+    top_priority = sum(1 for row in rows if row.get("priority_cn") == "本周优先" or row.get("priority_en") == "This-week priority")
+    total_evidence = sum(int(row.get("evidence_count", 0)) for row in rows)
+    positive_delta = sum(max(int(row.get("delta", 0)), 0) for row in rows)
+    col1, col2, col3 = st.columns(3)
+    col1.metric(title_pair("行动项", "Actions"), len(rows))
+    col2.metric(title_pair("本周优先", "This-week Priority"), top_priority)
+    col3.metric(title_pair("证据数", "Evidence Count"), total_evidence)
+    st.caption(f"{title_pair('正向变化合计', 'Positive Change Total')}: {positive_delta:+d}")
+
+    for index, row in enumerate(rows, start=1):
+        with st.container(border=True):
+            st.markdown(f"**{index}. {localized_value(row, 'action_area')} · {localized_value(row, 'priority')}**")
+            st.markdown(f"**{title_pair('触发依据', 'Trigger')}:** {localized_value(row, 'trigger')}")
+            st.markdown(f"**{title_pair('建议动作', 'Recommended Action')}:** {localized_value(row, 'recommended_action')}")
+            st.caption(f"{title_pair('负责人', 'Owner')}: {localized_value(row, 'owner')}")
+
+    with st.expander(title_pair("完整行动表", "Full Action Table")):
+        display_df(pd.DataFrame(rows))
 
 
 def render_competitor_watch(conn: sqlite3.Connection) -> None:
@@ -1754,6 +2003,9 @@ def main() -> None:
             title_pair("数据源", "Sources"),
             title_pair("新信号", "New Signals"),
             title_pair("业务解读", "Intelligence"),
+            title_pair("市场声音", "Market Voice"),
+            title_pair("趋势变化", "Trends"),
+            title_pair("本周行动", "Actions"),
             title_pair("竞品观察", "Competitor Watch"),
             title_pair("竞品矩阵", "Competitor Matrix"),
             title_pair("复核驾驶舱", "Review Cockpit"),
@@ -1775,24 +2027,30 @@ def main() -> None:
     with tabs[3]:
         render_business_intelligence(conn)
     with tabs[4]:
-        render_competitor_watch(conn)
+        render_market_voice(conn)
     with tabs[5]:
-        render_competitor_matrix(conn)
+        render_trend_changes(conn)
     with tabs[6]:
-        render_review_cockpit(conn)
+        render_weekly_actions(conn)
     with tabs[7]:
-        render_review_queue(conn)
+        render_competitor_watch(conn)
     with tabs[8]:
-        render_research_notes(conn)
+        render_competitor_matrix(conn)
     with tabs[9]:
-        render_market_questions(conn)
+        render_review_cockpit(conn)
     with tabs[10]:
-        render_payment_rails(conn)
+        render_review_queue(conn)
     with tabs[11]:
-        render_brief_draft(conn)
+        render_research_notes(conn)
     with tabs[12]:
-        render_capability_tracker(conn)
+        render_market_questions(conn)
     with tabs[13]:
+        render_payment_rails(conn)
+    with tabs[14]:
+        render_brief_draft(conn)
+    with tabs[15]:
+        render_capability_tracker(conn)
+    with tabs[16]:
         render_guardrails()
 
 

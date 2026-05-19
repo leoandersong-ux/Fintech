@@ -85,6 +85,27 @@ Use the intelligence tab to read:
 
 Generated notes and competitor matrices now support `--language zh|en`.
 
+## Market Voice and Trend Layer
+
+`v0.6` adds the first market-change layer:
+
+- `trends.py` classifies signals into market-voice themes and compares the latest signal window with the previous one.
+- `snapshot_exporter.py` writes a cloud-friendly JSON read model to `data/snapshots/lending_ops_dashboard_snapshot.json`.
+- Streamlit now has `市场声音`, `趋势变化`, and `本周行动` tabs.
+- Google Play/public app-listing sources remain disabled candidates until public-review boundaries are explicitly approved.
+
+Generate the snapshot:
+
+```powershell
+& '.\.venv-lending\Scripts\python.exe' .\lending_ops_radar\snapshot_exporter.py
+```
+
+View trend rows from CLI:
+
+```powershell
+& '.\.venv-lending\Scripts\python.exe' .\lending_ops_radar\trends.py --mode trends --language zh
+```
+
 ## Guardrails
 
 - Public pages only.
