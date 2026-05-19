@@ -537,6 +537,160 @@ def build_competitor_event_rows() -> list[dict[str, object]]:
     return [dict(item) for item in EVENT_SEEDS]
 
 
+FIELD_LABELS: dict[str, tuple[str, str]] = {
+    "limit_amount": ("额度", "limit"),
+    "pricing_or_disclosure": ("费用披露", "fee disclosure"),
+    "payment_or_disbursement": ("放款/还款通道", "payout/repayment rails"),
+    "privacy_policy": ("隐私/权限", "privacy/permissions"),
+    "support": ("客服/投诉入口", "support/complaints"),
+    "segment": ("客群", "segment"),
+    "tenor_or_repayment": ("期限/还款节奏", "tenor/repayment"),
+    "speed_claim": ("速度承诺", "speed promise"),
+    "company_news": ("公司动态", "company news"),
+    "app_listing": ("App listing", "app listing"),
+    "market_voice": ("舆论主题", "market voice"),
+    "channel_mix": ("渠道组合", "channel mix"),
+    "eligibility": ("资格要求", "eligibility"),
+    "financial_disclosure": ("财报/披露", "financial disclosure"),
+    "social_impact": ("社会影响", "social impact"),
+    "hiring": ("招聘", "hiring"),
+    "partnerships": ("合作伙伴", "partnerships"),
+    "licensing": ("许可/监管", "licensing"),
+    "complaints": ("投诉", "complaints"),
+    "product_layer": ("产品层", "product layer"),
+}
+
+
+TIER_ORDER = {
+    "core_digital_lending": 0,
+    "adjacent_microfinance_payroll": 1,
+    "rails_ecosystem": 2,
+}
+
+
+PRIORITY_ORDER = {
+    "高": 0,
+    "High": 0,
+    "中高": 1,
+    "Medium-high": 1,
+    "中": 2,
+    "Medium": 2,
+    "低到中": 3,
+    "Low-medium": 3,
+}
+
+
+def _field_labels(fields: str, language: str = "zh", limit: int = 4) -> str:
+    labels: list[str] = []
+    for raw_field in fields.split(","):
+        field = raw_field.strip()
+        if not field:
+            continue
+        cn, en = FIELD_LABELS.get(field, (field, field))
+        labels.append(en if language == "en" else cn)
+    return " / ".join(labels[:limit])
+
+
+def _policy_count_for_fields(fields: str) -> int:
+    field_set = {field.strip() for field in fields.split(",") if field.strip()}
+    count = 0
+    for theme in POLICY_THEMES:
+        theme_fields = {str(item) for item in theme["watch_fields"]}  # type: ignore[index]
+        if field_set.intersection(theme_fields):
+            count += 1
+    return count
+
+
+def _product_counts(product_rows: Iterable[dict[str, object]] | None) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in product_rows or []:
+        institution = str(row.get("institution", "")).strip()
+        if institution:
+            counts[institution] = counts.get(institution, 0) + 1
+    return counts
+
+
+def build_competitor_overview_rows(product_rows: Iterable[dict[str, object]] | None = None) -> list[dict[str, object]]:
+    """Return one concise matrix row per competitor or ecosystem candidate."""
+
+    matrix_counts = _product_counts(product_rows)
+    rows: list[dict[str, object]] = []
+    for row in build_competitor_universe():
+        institution = str(row["institution"])
+        product_count = matrix_counts.get(institution, 0)
+        if product_count:
+            evidence_level_key = "reviewed_product_matrix"
+            evidence_level_cn = "已复核产品字段"
+            evidence_level_en = "Reviewed product fields"
+            matrix_status_cn = f"已入产品矩阵：{product_count} 行"
+            matrix_status_en = f"In product matrix: {product_count} row(s)"
+            next_step_cn = "继续补费用、还款、支付失败和客服字段。"
+            next_step_en = "Continue filling fee, repayment, failed-payment, and support fields."
+        else:
+            evidence_level_key = "candidate_source"
+            evidence_level_cn = "候选来源/待回源"
+            evidence_level_en = "Candidate source / needs source review"
+            matrix_status_cn = "候选观察：暂未入产品矩阵"
+            matrix_status_en = "Candidate watch: not yet in product matrix"
+            next_step_cn = "先做人工回源，确认产品字段后再进入产品矩阵。"
+            next_step_en = "Manually source-check first, then promote into the product matrix after product fields are confirmed."
+
+        watch_fields = str(row.get("watch_fields", ""))
+        rows.append(
+            {
+                **row,
+                "product_matrix_rows": product_count,
+                "evidence_level_key": evidence_level_key,
+                "evidence_level_cn": evidence_level_cn,
+                "evidence_level_en": evidence_level_en,
+                "matrix_status_cn": matrix_status_cn,
+                "matrix_status_en": matrix_status_en,
+                "watch_summary_cn": f"看{_field_labels(watch_fields, 'zh', 3)}",
+                "watch_summary_en": f"Watch {_field_labels(watch_fields, 'en', 3)}",
+                "policy_pressure_count": _policy_count_for_fields(watch_fields),
+                "next_step_cn": next_step_cn,
+                "next_step_en": next_step_en,
+            }
+        )
+    return sorted(
+        rows,
+        key=lambda item: (
+            TIER_ORDER.get(str(item.get("tier_key")), 99),
+            PRIORITY_ORDER.get(str(item.get("watch_priority_cn")), 99),
+            str(item.get("institution")),
+        ),
+    )
+
+
+def build_watch_panel_rows(product_rows: Iterable[dict[str, object]] | None = None) -> list[dict[str, object]]:
+    """Return compact visual cards for competitor observation panels."""
+
+    rows = []
+    for row in build_competitor_overview_rows(product_rows):
+        rows.append(
+            {
+                "institution": row["institution"],
+                "tier_key": row["tier_key"],
+                "tier_cn": row["tier_cn"],
+                "tier_en": row["tier_en"],
+                "watch_priority_cn": row["watch_priority_cn"],
+                "watch_priority_en": row["watch_priority_en"],
+                "evidence_level_cn": row["evidence_level_cn"],
+                "evidence_level_en": row["evidence_level_en"],
+                "matrix_status_cn": row["matrix_status_cn"],
+                "matrix_status_en": row["matrix_status_en"],
+                "watch_summary_cn": row["watch_summary_cn"],
+                "watch_summary_en": row["watch_summary_en"],
+                "policy_pressure_count": row["policy_pressure_count"],
+                "product_matrix_rows": row["product_matrix_rows"],
+                "next_step_cn": row["next_step_cn"],
+                "next_step_en": row["next_step_en"],
+                "source_links": row["source_links"],
+            }
+        )
+    return rows
+
+
 def grouped_competitor_counts(rows: list[dict[str, object]] | None = None) -> dict[str, int]:
     rows = rows or build_competitor_universe()
     counts: dict[str, int] = {}

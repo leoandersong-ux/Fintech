@@ -135,6 +135,13 @@ View trend rows from CLI:
 - `watchlist.competitors.expanded.json` stores additional candidate public sources. Most are disabled by default until manually approved.
 - Public app listings and public-review surfaces remain theme-level candidates; do not store usernames, personal identity, or sensitive raw narratives.
 
+`v0.8.1` makes the competitor matrix and watch views match the expanded map:
+
+- The matrix now starts with a concise all-target overview covering the full watch universe.
+- The product-field matrix remains a reviewed-evidence layer, so candidates without confirmed product facts are visible but clearly labeled.
+- The watch page now shows one compact card per competitor or ecosystem target, including evidence level, matrix status, watch fields, policy-pressure count, and source link.
+- This keeps the page readable while making it obvious that the platform tracks more than the first few lenders.
+
 ## Guardrails
 
 - Public pages only.

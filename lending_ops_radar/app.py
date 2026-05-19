@@ -27,8 +27,10 @@ from lending_ops_radar.brief_generator import (
 )
 from lending_ops_radar.competitor_intelligence import (
     build_competitor_event_rows,
+    build_competitor_overview_rows,
     build_competitor_universe,
     build_policy_impact_rows,
+    build_watch_panel_rows,
     grouped_competitor_counts,
 )
 from lending_ops_radar.intelligence import (
@@ -213,6 +215,35 @@ APP_CSS = """
         margin: 0.12rem 0.15rem 0.12rem 0;
         font-size: 0.78rem;
         color: #47564f;
+    }
+    .status-grid-card {
+        background: #ffffff;
+        border: 1px solid #dce4df;
+        border-radius: 8px;
+        padding: 0.8rem 0.9rem;
+        min-height: 190px;
+        margin-bottom: 0.7rem;
+    }
+    .status-grid-card .institution {
+        color: #153a32;
+        font-weight: 800;
+        font-size: 1rem;
+    }
+    .mini-status {
+        display: inline-block;
+        border-radius: 999px;
+        background: #f2f5f1;
+        color: #405047;
+        padding: 0.12rem 0.5rem;
+        font-size: 0.78rem;
+        margin: 0.08rem 0.12rem 0.08rem 0;
+    }
+    .matrix-band {
+        background: #f8faf7;
+        border: 1px solid #dfe8dd;
+        border-radius: 8px;
+        padding: 0.85rem 1rem;
+        margin: 0.6rem 0 0.9rem 0;
     }
     .compact-divider {
         border-top: 1px solid #e1e7e3;
@@ -1314,6 +1345,47 @@ def _chips_from_csv(value: object) -> str:
     return " ".join(chips)
 
 
+def _first_source_link(row: dict[str, object]) -> str:
+    source_links = str(row.get("source_links", ""))
+    return source_links.split(" ; ")[0] if source_links else ""
+
+
+def render_competitor_status_cards(rows: list[dict[str, object]], limit: int | None = None) -> None:
+    selected = rows[:limit] if limit else rows
+    columns = st.columns(3)
+    for index, row in enumerate(selected):
+        with columns[index % 3]:
+            source_link = _first_source_link(row)
+            source_html = (
+                f'<a href="{safe_html(source_link)}" target="_blank">{title_pair("来源", "Source")}</a>'
+                if source_link
+                else ""
+            )
+            st.markdown(
+                f"""
+                <div class="status-grid-card">
+                    <div class="institution">{safe_html(row.get("institution", ""))}</div>
+                    <div class="brief-meta">{safe_html(localized_value(row, "tier"))}</div>
+                    <div>
+                        <span class="mini-status">{safe_html(localized_value(row, "watch_priority"))}</span>
+                        <span class="mini-status">{safe_html(localized_value(row, "evidence_level"))}</span>
+                    </div>
+                    <div class="compact-divider"></div>
+                    <strong>{title_pair("当前状态", "Current Status")}</strong><br>
+                    {safe_html(localized_value(row, "matrix_status"))}<br><br>
+                    <strong>{title_pair("观察", "Watch")}</strong><br>
+                    {safe_html(localized_value(row, "watch_summary"))}<br>
+                    <div class="brief-meta">
+                        {title_pair("政策压力", "Policy pressure")}: {safe_html(row.get("policy_pressure_count", 0))}
+                        · {title_pair("产品矩阵", "Product rows")}: {safe_html(row.get("product_matrix_rows", 0))}
+                        · {source_html}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
 def render_competitor_landscape() -> None:
     snapshot = load_dashboard_snapshot()
     universe = snapshot_list(snapshot, "competitor_universe") or build_competitor_universe()
@@ -1482,16 +1554,41 @@ def render_competitor_watch(conn: sqlite3.Connection) -> None:
         LIMIT 100
         """,
     )
+    snapshot = load_dashboard_snapshot()
+    product_rows = build_product_matrix(conn)
+    watch_rows = snapshot_list(snapshot, "competitor_watch_panel_rows") or build_watch_panel_rows(product_rows)
+    expanded_sources = expanded_watchlist_candidates()
+
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric(title_pair("竞品源", "Sources"), len(sources))
-    col2.metric(title_pair("已启用", "Enabled"), int((sources["enabled"] == 1).sum()) if not sources.empty else 0)
-    col3.metric(title_pair("竞品信号", "Signals"), len(signals))
+    col1.metric(title_pair("观察对象", "Watch Targets"), len(watch_rows))
+    col2.metric(title_pair("已配置来源", "Configured Sources"), len(sources))
+    col3.metric(title_pair("候选来源", "Candidate Sources"), len(expanded_sources))
     col4.metric(title_pair("待复核", "New"), int((signals["review_status"] == "new").sum()) if not signals.empty else 0)
 
-    st.markdown(f"#### {title_pair('来源清单', 'Source Watchlist')}")
+    st.markdown(f"#### {title_pair('竞品观察面板', 'Competitor Watch Panel')}")
+    st.markdown(
+        f"""
+        <div class="matrix-band">
+        {ui_text(
+            "这里覆盖所有竞品/生态候选。卡片只显示当前状态、观察字段、政策压力和是否已进入产品矩阵；细节留给下方来源和信号表。",
+            "This covers every competitor and ecosystem candidate. Cards show current status, watch fields, policy pressure, and whether the target has product-matrix evidence; source and signal details stay below."
+        )}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    render_competitor_status_cards(watch_rows)
+
+    st.markdown(f"#### {title_pair('已配置来源', 'Configured Source Watchlist')}")
     display_df(sources)
 
-    st.markdown(f"#### {title_pair('竞品新信号', 'Competitor Signals')}")
+    with st.expander(title_pair("候选来源清单", "Candidate Source List")):
+        if expanded_sources:
+            display_df(pd.DataFrame(expanded_sources))
+        else:
+            st.info(ui_text("尚未创建扩展 watchlist 文件。", "No expanded watchlist file yet."))
+
+    st.markdown(f"#### {title_pair('已抓取竞品信号', 'Collected Competitor Signals')}")
     if signals.empty:
         st.info(ui_text("还没有竞品信号。运行启用的 competitor watchlist 源后会出现在这里。", "No competitor signals yet. Run enabled competitor watchlist sources and they will appear here."))
     else:
@@ -1516,9 +1613,50 @@ def render_competitor_matrix(conn: sqlite3.Connection) -> None:
         "A comparable view of reviewed competitor signals: positioning, product layer, limit tier, speed promise, payment maturity, support/privacy maturity, and evidence gaps.",
     )
     rows = build_product_matrix(conn)
+    snapshot = load_dashboard_snapshot()
+    overview_rows = snapshot_list(snapshot, "competitor_overview_rows") or build_competitor_overview_rows(rows)
+    overview_df = pd.DataFrame(overview_rows)
+    st.markdown(f"#### {title_pair('竞品总览矩阵', 'Competitor Overview Matrix')}")
+    st.markdown(
+        f"""
+        <div class="matrix-band">
+        {ui_text(
+            "总览矩阵覆盖所有观察对象；产品矩阵只覆盖已复核到产品字段的对象。这样既能看到全市场，又不会把候选信号误读成已确认产品事实。",
+            "The overview matrix covers every watch target; the product matrix covers only targets with reviewed product-field evidence. This keeps market coverage broad without treating candidates as confirmed product facts."
+        )}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    render_competitor_status_cards(overview_rows)
+    with st.expander(title_pair("完整竞品总览表", "Full Competitor Overview Table")):
+        if overview_df.empty:
+            st.info(ui_text("暂无竞品总览数据。", "No competitor overview rows yet."))
+        else:
+            display_df(
+                overview_df[
+                    [
+                        "institution",
+                        "tier_cn",
+                        "tier_en",
+                        "watch_priority_cn",
+                        "watch_priority_en",
+                        "evidence_level_cn",
+                        "evidence_level_en",
+                        "matrix_status_cn",
+                        "matrix_status_en",
+                        "watch_summary_cn",
+                        "watch_summary_en",
+                        "policy_pressure_count",
+                        "product_matrix_rows",
+                        "source_links",
+                    ]
+                ]
+            )
+
     matrix_df = pd.DataFrame(rows)
     if matrix_df.empty:
-        st.info(ui_text("还没有竞品矩阵。请先复核 competitor signals。", "No competitor matrix yet. Review competitor signals first."))
+        st.info(ui_text("还没有已复核产品字段矩阵。候选对象已经显示在上方总览矩阵。", "No reviewed product-field matrix yet. Candidate targets are already shown in the overview matrix above."))
         return
 
     matrix_df["data_completeness_score"] = pd.to_numeric(matrix_df["data_completeness_score"], errors="coerce").fillna(0).astype(int)

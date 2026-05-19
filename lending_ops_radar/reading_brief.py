@@ -54,6 +54,8 @@ def _counts(snapshot: dict[str, Any]) -> dict[str, int]:
         "market_questions",
         "competitor_matrix_rows",
         "competitor_universe_rows",
+        "competitor_overview_rows",
+        "competitor_watch_panel_rows",
         "policy_impact_rows",
         "competitor_event_rows",
     ):

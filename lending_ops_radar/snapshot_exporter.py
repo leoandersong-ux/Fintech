@@ -18,8 +18,10 @@ if str(ROOT) not in sys.path:
 from lending_ops_radar.brief_generator import load_market_questions, load_recent_notes, load_reviewed_signals
 from lending_ops_radar.competitor_intelligence import (
     build_competitor_event_rows,
+    build_competitor_overview_rows,
     build_competitor_universe,
     build_policy_impact_rows,
+    build_watch_panel_rows,
 )
 from lending_ops_radar.competitor_matrix import build_product_matrix
 from lending_ops_radar.intelligence import (
@@ -108,6 +110,8 @@ def build_snapshot(conn: sqlite3.Connection) -> dict[str, Any]:
     quality_counts = summary_counts(quality_rows)
     matrix_rows = build_product_matrix(conn)
     competitor_universe = build_competitor_universe()
+    competitor_overview = build_competitor_overview_rows(matrix_rows)
+    competitor_watch_panel = build_watch_panel_rows(matrix_rows)
     policy_impact = build_policy_impact_rows()
     competitor_events = build_competitor_event_rows()
     source_rows = source_health_rows(conn)
@@ -130,6 +134,8 @@ def build_snapshot(conn: sqlite3.Connection) -> dict[str, Any]:
             "source_runs": scalar(conn, "SELECT COUNT(*) FROM source_runs"),
             "competitor_matrix_rows": len(matrix_rows),
             "competitor_universe_rows": len(competitor_universe),
+            "competitor_overview_rows": len(competitor_overview),
+            "competitor_watch_panel_rows": len(competitor_watch_panel),
             "policy_impact_rows": len(policy_impact),
             "competitor_event_rows": len(competitor_events),
         },
@@ -152,6 +158,8 @@ def build_snapshot(conn: sqlite3.Connection) -> dict[str, Any]:
         "source_health": source_rows,
         "source_trends": source_trends,
         "competitor_universe": competitor_universe,
+        "competitor_overview_rows": competitor_overview,
+        "competitor_watch_panel_rows": competitor_watch_panel,
         "policy_impact_rows": policy_impact,
         "competitor_event_rows": competitor_events,
         "competitor_matrix_top": matrix_rows[:20],
